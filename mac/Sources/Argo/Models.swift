@@ -127,3 +127,19 @@ struct AppState: Codable {
 
 struct PairCode: Codable { let code: String; let expires: Double }
 struct APIError: Codable { let error: String }
+
+/// A worktree opened with the worktree button: its own folder and branch argo/wt/<name>, tracking the remote.
+struct WorktreeInfo: Decodable, Identifiable, Hashable {
+    let name: String
+    let path: String
+    let branch: String
+    let upstream: String?
+    let behind: Int
+    let ahead: Int
+    let dirty: Int
+    let head: String
+    /// Set by create and pull: how many new remote commits it took in, and anything worth telling the user.
+    let pulled: Int?
+    let note: String?
+    var id: String { path }
+}

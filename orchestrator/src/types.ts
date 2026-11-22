@@ -91,6 +91,8 @@ export interface Run {
   terminals?: boolean
   baseBranch: string
   baseCommit: string
+  // set once newer remote commits were merged in mid-run: diffs start here so a teammate's work is not counted as ours
+  diffBase?: string
   branch: string
   planner?: Assignment
   tasks: Task[]

@@ -17,6 +17,7 @@ struct WorkspaceView: View {
                 Text("\(terminals.count) terminal\(terminals.count == 1 ? "" : "s")")
                     .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
                 Spacer()
+                WorktreeMenu()
                 AddMemberMenu()
                 if store.filesHidden {
                     Button { store.filesHidden = false } label: { Image(systemName: "sidebar.right") }
@@ -55,6 +56,14 @@ struct WorkspaceView: View {
             }
         }
         .onAppear { openFirstTerminal() }
+        // check the remote every minute, so a teammate's push shows up as "behind" on the worktree panes
+        .task(id: store.project) {
+            await store.loadWorktrees()
+            while !Task.isCancelled {
+                await store.loadWorktrees(fetch: true)
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+            }
+        }
         .onChange(of: store.project) { openFirstTerminal() }
         .onChange(of: store.state == nil) { openFirstTerminal() }
     }
@@ -147,5 +156,50 @@ struct RunStrip: View {
             }
         }
         .frame(height: 28).background(Theme.bg)
+    }
+}
+
+/// The worktree button: start a fresh worktree from the latest remote code with an agent in it, or put
+/// another agent into an existing one, pull what teammates pushed, or remove it.
+struct WorktreeMenu: View {
+    @EnvironmentObject var hub: TeamHub
+    @EnvironmentObject var store: Store
+    var body: some View {
+        let kinds = TeamHub.kinds.filter { $0.bin == nil || (store.agent($0.id)?.installed ?? true) }
+        Menu {
+            Section("New worktree from latest") {
+                ForEach(kinds, id: \.id) { k in
+                    Button(k.id == "shell" ? "Shell in a new worktree" : "\(k.label) in a new worktree") { store.newWorktree(open: k.id, hub: hub) }
+                }
+            }
+            if !store.worktrees.isEmpty {
+                Section("Worktrees") {
+                    ForEach(store.worktrees) { w in
+                        let agents = hub.members(in: store.project).filter { $0.worktree == w.name }.map(\.name)
+                        Menu("⑂ \(w.name)\(w.behind > 0 ? "  (\(w.behind) behind)" : "")\(agents.isEmpty ? "" : "  · " + agents.joined(separator: ", "))") {
+                            ForEach(kinds, id: \.id) { k in
+                                Button("Open \(k.label) here") { hub.add(kind: k.id, project: store.project, in: w) }
+                            }
+                            Divider()
+                            Button(w.behind > 0 ? "Pull latest (\(w.behind) new commit\(w.behind == 1 ? "" : "s"))" : "Pull latest") { store.pullLatest(w) }
+                                .disabled(w.upstream == nil)
+                            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: w.path)]) }
+                            Divider()
+                            Button(w.dirty > 0 ? "Remove (discards \(w.dirty) uncommitted change\(w.dirty == 1 ? "" : "s"))" : "Remove", role: .destructive) {
+                                store.removeWorktree(w, hub: hub, force: true)
+                            }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Check for new pushes") { Task { await store.loadWorktrees(fetch: true) } }
+        } label: {
+            let behind = store.worktrees.contains { $0.behind > 0 }
+            Label("Worktree", systemImage: "arrow.triangle.branch").foregroundStyle(behind ? Theme.ring : Theme.dim)
+        }
+        .menuStyle(.borderlessButton).fixedSize().tint(Theme.dim)
+        .disabled(store.project.isEmpty)
+        .help(store.project.isEmpty ? "Choose a git project to use worktrees" : "Give an agent its own worktree, started from the latest code on the remote")
     }
 }

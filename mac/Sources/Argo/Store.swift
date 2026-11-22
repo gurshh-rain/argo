@@ -104,6 +104,8 @@ final class Store: ObservableObject {
         show(run: a.runId)
     }
     @Published var banner: String?
+    /// Worktrees of the current project opened with the worktree button (not the ones runs make).
+    @Published var worktrees: [WorktreeInfo] = []
     @Published var startupError: String?
     @Published var pair: PairCode?
 
@@ -227,6 +229,41 @@ final class Store: ObservableObject {
     func saveSettings(_ patch: [String: Any]) {
         act { let _: Ignored = try await self.daemon.request("PUT", "settings", body: patch) }
     }
+    private func worktreeBody(_ extra: [String: Any] = [:]) -> [String: Any] { extra.merging(["project": project]) { a, _ in a } }
+
+    /// `fetch`: ask the remote first, so "behind" shows what teammates have pushed since.
+    func loadWorktrees(fetch: Bool = false) async {
+        guard !project.isEmpty else { worktrees = []; return }
+        let q = project.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "/-._~").union(.alphanumerics)) ?? ""
+        let list: [WorktreeInfo]? = try? await daemon.request("GET", "worktrees?project=\(q)\(fetch ? "&fetch=1" : "")")
+        if let list, list != worktrees { worktrees = list }
+    }
+    /// Creates a worktree from the latest remote code and, given a kind, opens that agent in it.
+    func newWorktree(open kind: String?, hub: TeamHub) {
+        act {
+            let w: WorktreeInfo = try await self.daemon.request("POST", "worktrees", body: self.worktreeBody())
+            if let kind { hub.add(kind: kind, project: self.project, in: w) }
+            if let note = w.note { self.banner = note }
+            await self.loadWorktrees()
+        }
+    }
+    func pullLatest(_ w: WorktreeInfo) {
+        act {
+            let r: WorktreeInfo = try await self.daemon.request("POST", "worktrees/pull", body: self.worktreeBody(["path": w.path]))
+            self.banner = (r.pulled ?? 0) == 0 ? "\(w.name) already has everything on \(w.upstream ?? "the remote")." : "Pulled \(r.pulled!) new commit(s) from \(w.upstream ?? "the remote") into \(w.name)."
+            await self.loadWorktrees()
+        }
+    }
+    func removeWorktree(_ w: WorktreeInfo, hub: TeamHub, force: Bool = false) {
+        act {
+            struct Gone: Decodable { let keptBranch: String? }
+            let g: Gone = try await self.daemon.request("POST", "worktrees/remove", body: self.worktreeBody(["path": w.path, "force": force]))
+            for m in hub.members(in: self.project) where m.worktree == w.name { hub.close(m.id) }
+            if let b = g.keptBranch { self.banner = "Removed \(w.name). Its branch \(b) has commits that are not on the remote, so it was kept." }
+            await self.loadWorktrees()
+        }
+    }
+
     func loadPair() {
         act { self.pair = try await self.daemon.request("GET", "pair") }
     }

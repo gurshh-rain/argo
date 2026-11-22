@@ -46,6 +46,13 @@ control your agents, so keep it on localhost or a private network (Tailscale).
   follow-ups, decisions, each subtask's status, agent, model and changed files. Every agent gets it in
   its prompt and can re-read the live file; agents record decisions in `.argo/notes/`, which the
   orchestrator folds into the record. The directory is excluded via `.git/info/exclude`.
+- **Staying current.** A teammate may have pushed since you last pulled. A run fetches and merges the newest
+  remote commits into its integration branch before it plans, again before the checks, and once more when
+  you click Merge (a conflict goes to the lead agent; your own checkout is never touched). The
+  **Worktree** button opens Claude, Codex, Devin or a shell in a fresh worktree (`argo/wt/<name>`) started
+  from the latest remote code, or puts another agent into an existing one. Each worktree tracks the remote
+  branch; the app checks the remote every minute, shows "N behind" on that worktree's panes, and
+  **Pull latest** merges new pushes in without losing an agent's uncommitted work.
 - **Model controls.** Settings: default CLI (or Auto), a model per CLI, reasoning level, parallelism,
   whether plans need approval. Per-subtask override from the pane header. Every pane, the record and
   the phone show which agent and model did the work and whether it was an override.

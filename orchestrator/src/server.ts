@@ -5,6 +5,7 @@ import { loadConfig, saveConfig, integrations } from './config.ts'
 import { runs, attention, subscribe, readLog, save } from './store.ts'
 import { agents } from './agents.ts'
 import * as engine from './engine.ts'
+import * as g from './git.ts'
 import { summary, transcribe, speak, call, describe } from './voice.ts'
 import type { Run, Settings } from './types.ts'
 
@@ -133,6 +134,20 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
     if (m === 'POST' && at('runs', null, 'tasks', null, 'requeue')) return engine.requeue(r, p[3]), r
     if (m === 'POST' && at('runs', null, 'tasks', null, 'background')) return engine.runInBackground(r, p[3]), r
     if (m === 'POST' && at('runs', null, 'tasks', null, 'retry')) return engine.retry(r, p[3], (await body(req)).instruction), r
+  }
+  // Worktrees you open yourself: each starts from the newest remote code and gets its own branch.
+  if (at('worktrees') || at('worktrees', null)) {
+    const b = m === 'GET' ? {} : await body(req)
+    const project = resolvePath(String(b.project || url.searchParams.get('project') || ''))
+    if (!project || project === '/') throw new HttpError(400, 'Choose a project first')
+    if (m === 'GET' && at('worktrees')) {
+      const up = url.searchParams.get('fetch') && (await g.upstreamOf(project))
+      if (up) await g.fetchRemote(project, up)
+      return g.listWorktrees(project)
+    }
+    if (m === 'POST' && at('worktrees')) return g.addWorktree(project, String(b.name || ''))
+    if (m === 'POST' && at('worktrees', 'pull')) return g.syncWorktree(project, String(b.path || ''))
+    if (m === 'POST' && at('worktrees', 'remove')) return g.deleteWorktree(project, String(b.path || ''), !!b.force)
   }
   if (m === 'POST' && at('attention', null, 'resolve')) {
     const a = attention.find((x) => x.id === p[1])

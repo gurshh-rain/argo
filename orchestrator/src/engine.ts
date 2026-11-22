@@ -57,8 +57,48 @@ export async function startRun(project: string, goal: string, opts: { constraint
   if (dirty) run.decisions.push({ at: Date.now(), by: 'orchestrator', text: `The user's checkout has ${dirty} uncommitted change(s) that agents cannot see; work is based on commit ${baseCommit.slice(0, 8)}.` })
   runs.set(id, run)
   save(run)
-  plan(run, opts.autoApprove ?? loadConfig().settings.autoApprove).catch((err) => fail(run, err))
+  pullLatest(run, 'before planning')
+    .then(() => plan(run, opts.autoApprove ?? loadConfig().settings.autoApprove))
+    .catch((err) => fail(run, err))
   return run
+}
+
+// Someone may have pushed since the user last pulled. Merge the newest remote commits into the run's
+// integration branch (never the user's checkout) so agents build on, and checks run against, current code.
+// A conflict goes to the lead agent; if it cannot resolve it the run carries on from the older base.
+async function pullLatest(run: Run, when: string): Promise<boolean> {
+  if (!run.isolated) return true
+  const cwd = g.mainTree(run.id)
+  const up = await g.upstreamOf(run.project, run.baseBranch)
+  if (!up) return true
+  const p = await g.pullLatest(cwd, up)
+  if (p.fetchError) log(run, `Could not fetch ${up} (${p.fetchError.split('\n')[0]}); using the last fetched copy`)
+  if (!p.pulled) return true
+  if (p.error) {
+    log(run, `Could not merge ${p.pulled} new commit(s) from ${up}: ${p.error}`)
+    return false
+  }
+  if (p.conflicts.length) {
+    const a = lead()
+    log(run, `${p.pulled} new commit(s) on ${up} conflict with this run in ${p.conflicts.join(', ')}; asking ${label(a)} to resolve them`)
+    const res = await runAgent({
+      ...a, cwd, onLine: (l) => log(run, l),
+      prompt: `Someone pushed ${p.pulled} new commit(s) to ${up}. Merging them into this run's integration branch stopped with conflicts in: ${p.conflicts.join(', ')}.\nResolve every conflict marker in those files so that BOTH sides' intent is preserved. Do not run git commit or git merge; just edit the files.\n\nContext:\n${renderMemory(run)}`,
+    })
+    if (!res.ok || !(await g.commitMerge(cwd, `Merge latest ${up} (conflicts resolved)`))) {
+      await g.git(cwd, 'merge', '--abort')
+      raise(run, 'conflict', `${p.pulled} new commit(s) on ${up} conflict with this run in ${p.conflicts.join(', ')}. The run continues without them; merge ${up} before you push.`)
+      return false
+    }
+  }
+  const upSha = (await g.git(cwd, 'rev-parse', up)).out
+  if (run.tasks.length) run.diffBase = upSha
+  else run.baseCommit = (await g.git(cwd, 'rev-parse', 'HEAD')).out // nothing done yet: the run simply starts from the newer code
+  const text = `Pulled ${p.pulled} new commit(s) from ${up} ${when} (pushed by someone else since your last pull); agents now build on top of them.`
+  run.decisions.push({ at: Date.now(), by: 'orchestrator', text })
+  log(run, text)
+  save(run)
+  return true
 }
 
 function fail(run: Run, err: unknown) {
@@ -346,6 +386,8 @@ function detectChecks(cwd: string): string[] {
 async function verify(run: Run) {
   run.status = 'verifying'
   save(run)
+  await pullLatest(run, 'before the checks')
+  if ((run.status as string) === 'cancelled') return
   const cwd = base(run)
   const checks: CheckResult[] = []
   // checks only make sense for code in a repo; a research run has nothing to build or test
@@ -357,8 +399,9 @@ async function verify(run: Run) {
   }
   // generated files (node_modules etc.) must not land on the branch
   if (run.isolated) await g.git(cwd, 'checkout', '--', '.')
-  const files = run.isolated ? await g.changedFiles(run.project, run.baseCommit, run.branch) : [...new Set(run.tasks.flatMap((t) => t.changedFiles))]
-  const stat = run.isolated ? (await g.git(run.project, 'diff', '--stat', `${run.baseCommit}...${run.branch}`)).out : files.join('\n')
+  const from = run.diffBase || run.baseCommit
+  const files = run.isolated ? await g.changedFiles(run.project, from, run.branch) : [...new Set(run.tasks.flatMap((t) => t.changedFiles))]
+  const stat = run.isolated ? (await g.git(run.project, 'diff', '--stat', `${from}...${run.branch}`)).out : files.join('\n')
   // Review with a different agent than the one that did most of the work, when there is one.
   const counts = new Map<string, number>()
   for (const t of run.tasks) counts.set(assignment(t).agent, (counts.get(assignment(t).agent) || 0) + 1)
@@ -455,7 +498,19 @@ export function cancel(run: Run) {
 
 export async function applyRun(run: Run) {
   if (!run.isolated) throw new Error('This run has no git repository, so there is nothing to merge. Its files are in ' + run.project)
-  const out = await g.apply(run.project, run.id)
+  // one last check that nobody pushed since the checks ran
+  const up = await g.upstreamOf(run.project, run.baseBranch)
+  let note = ''
+  if (up) {
+    const p = await g.pullLatest(g.mainTree(run.id), up, true)
+    if (p.conflicts.length) throw new Error(`${p.pulled} new commit(s) were pushed to ${up} and conflict with this run in ${p.conflicts.join(', ')}. Send a follow-up such as "merge the latest ${up}" and apply again.`)
+    if (p.error) throw new Error(p.error)
+    if (p.pulled) {
+      run.diffBase = (await g.git(run.project, 'rev-parse', up)).out
+      note = `\nIncludes ${p.pulled} new commit(s) from ${up} that were pushed after the checks ran; run the checks again before you push.`
+    }
+  }
+  const out = (await g.apply(run.project, run.id)) + note
   run.applied = true
   save(run)
   return out

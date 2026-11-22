@@ -10,6 +10,8 @@ struct Member: Identifiable, Hashable {
     let cwd: String
     /// The workspace this terminal belongs to: the project folder, or "" when there is none.
     let workspace: String
+    /// The Argo worktree it works in (its name, e.g. "wt-1"), or nil for the project checkout itself.
+    var worktree: String? = nil
 }
 
 /// How the terminals are arranged: a tree of side-by-side and stacked splits, as in cmux.
@@ -145,11 +147,16 @@ final class TeamHub: ObservableObject {
     ]
 
     /// Opens a terminal. It splits off `beside` (default: the focused pane), to the right or below.
-    func add(kind: String, project: String, beside: UUID? = nil, horizontal: Bool = true) {
-        let cwd = project.isEmpty ? NSHomeDirectory() : project
+    /// `in`: a worktree to work in instead of the project checkout; defaults to the worktree of the pane it splits from.
+    func add(kind: String, project: String, beside: UUID? = nil, horizontal: Bool = true, in tree: WorktreeInfo? = nil) {
+        let from = beside.flatMap { id in members.first { $0.id == id } }
+        let worktree = tree?.name ?? from?.worktree
+        let cwd = tree?.path ?? (from?.worktree != nil ? from!.cwd : (project.isEmpty ? NSHomeDirectory() : project))
+        // the shared record and roster live in the project, so every worktree's agents read the same ones
+        let home = project.isEmpty ? cwd : project
         let n = (members.filter { $0.kind == kind && $0.workspace == project }.map { Int($0.name.split(separator: " ").last ?? "") ?? 0 }.max() ?? 0) + 1
         let label = Self.kinds.first { $0.id == kind }?.label ?? kind
-        let m = Member(name: "\(label) \(n)", kind: kind, cwd: cwd, workspace: project)
+        let m = Member(name: "\(label) \(n)", kind: kind, cwd: cwd, workspace: project, worktree: worktree)
         members.append(m)
         // split off the chosen pane, else the focused one if it is in this workspace, else the last one here
         let mine = members(in: project).dropLast().map(\.id)
@@ -157,7 +164,7 @@ final class TeamHub: ObservableObject {
         if let target, let l = layouts[project] { layouts[project] = l.inserting(m.id, beside: target, horizontal: horizontal) }
         else { layouts[project] = .leaf(m.id) }
         focused = m.id
-        writeRoster(project: cwd)
+        writeRoster(project: home)
         let v = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
         let d = TermDelegate(hub: self, id: m.id)
         v.processDelegate = d
@@ -167,10 +174,12 @@ final class TeamHub: ObservableObject {
         v.nativeForegroundColor = NSColor(white: 0.92, alpha: 1)
         v.caretColor = .white
         views[m.id] = v
-        let rosterPath = (cwd as NSString).appendingPathComponent(".argo/team.md")
+        let argo = (home as NSString).appendingPathComponent(".argo")
         var env = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
-        env += ["ARGO_MEMBER=\(m.name)", "ARGO_TEAM_FILE=\(rosterPath)", "ARGO_RECORD=\((cwd as NSString).appendingPathComponent(".argo/MEMORY.md"))"]
-        let intro = "You are \(m.name), one member of a team of coding agents working in this repo at the same time. Read .argo/team.md for the roster and .argo/MEMORY.md for the shared record. Coordinate through those files; write decisions as notes in .argo/notes/. Stay within your own task and do not overwrite files another member is editing."
+        env += ["ARGO_MEMBER=\(m.name)", "ARGO_TEAM_FILE=\(argo)/team.md", "ARGO_RECORD=\(argo)/MEMORY.md"]
+        if let worktree { env.append("ARGO_WORKTREE=\(worktree)") }
+        let place = worktree.map { " You work in your own git worktree (branch argo/wt/\($0)), so other agents cannot see or overwrite your edits until they are merged. It tracks the remote branch: run `git pull` before you start and before you finish, so you build on what teammates have pushed." } ?? ""
+        let intro = "You are \(m.name), one member of a team of coding agents working in this repo at the same time.\(place) Read \(argo)/team.md for the roster and \(argo)/MEMORY.md for the shared record. Coordinate through those files; write decisions as notes in \(argo)/notes/. Stay within your own task and do not overwrite files another member is editing."
         let bin = Self.kinds.first { $0.id == kind }?.bin
         // A login+interactive shell so PATH matches the user's Terminal (~/.local/bin etc.).
         let cmd = bin.map { "exec \($0) \(kind == "devin" ? "--" : "") '\(intro.replacingOccurrences(of: "'", with: "'\\''"))'" } ?? "exec /bin/zsh -l"
@@ -187,7 +196,7 @@ final class TeamHub: ObservableObject {
         layouts[ws] = layouts[ws]?.removing(id)
         ringing.remove(id); exited.remove(id)
         if focused == id { focused = members.last?.id }
-        if let p = members.first?.cwd { writeRoster(project: p) }
+        if !ws.isEmpty { writeRoster(project: ws) }
     }
 
     func focus(_ id: UUID) {
@@ -201,7 +210,7 @@ final class TeamHub: ObservableObject {
         let dir = (project as NSString).appendingPathComponent(".argo")
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         var s = "# Argo team\n\nTerminals currently open in this project. Each is a separate agent working in parallel.\n\n"
-        for m in members where m.cwd == project { s += "- \(m.name) (\(m.kind))\n" }
+        for m in members where m.workspace == project { s += "- \(m.name) (\(m.kind))\(m.worktree.map { ", worktree \($0) at \(m.cwd)" } ?? ", main checkout")\n" }
         try? s.write(toFile: (dir as NSString).appendingPathComponent("team.md"), atomically: true, encoding: .utf8)
     }
 
@@ -247,6 +256,11 @@ struct TerminalPane: View {
         PaneFrame(ring: hub.ringing.contains(member.id), active: focused) {
             Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(Theme.text)
             Text(member.name).font(.system(size: 12)).foregroundStyle(Theme.text)
+            if let wt = member.worktree {
+                let info = store.worktrees.first { $0.name == wt }
+                Chip(text: "⑂ \(wt)\(info.map { $0.behind > 0 ? " · \($0.behind) behind" : "" } ?? "")", color: (info?.behind ?? 0) > 0 ? Theme.ring : Theme.dim)
+                    .help(info.map { $0.behind > 0 ? "\($0.behind) new commit(s) were pushed to \($0.upstream ?? "the remote"). Pull latest from the worktree menu." : "Up to date with \($0.upstream ?? "its base")" } ?? member.cwd)
+            }
             if hub.exited.contains(member.id) { Chip(text: "exited") }
             if let job = store.runs(in: member.workspace).flatMap(\.tasks).first(where: { $0.terminal == member.name && $0.delegate?.state == "sent" }) {
                 StatusDot(status: "running")
