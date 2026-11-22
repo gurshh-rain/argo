@@ -27,6 +27,12 @@ export interface Task {
   ranWith?: Assignment
   branch?: string
   worktree?: string
+  // Set while the subtask is handed to an interactive terminal in the Mac app instead of a background process.
+  delegate?: { state: 'waiting' | 'sent'; promptFile: string; resultFile: string }
+  // the terminal that did (or is doing) this subtask
+  terminal?: string
+  // the user asked for this subtask to run in the background rather than wait for a terminal
+  headless?: boolean
   sessionId?: string
   summary?: string
   changedFiles: string[]
@@ -81,6 +87,8 @@ export interface Run {
   // true when the project is a git repo: each subtask gets its own worktree and is merged.
   // false for research or a plain folder: agents share one working folder, nothing is branched or merged.
   isolated: boolean
+  // subtasks that other subtasks depend on are handed to the user's open terminals
+  terminals?: boolean
   baseBranch: string
   baseCommit: string
   branch: string

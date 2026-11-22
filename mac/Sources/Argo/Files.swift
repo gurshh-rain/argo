@@ -17,9 +17,8 @@ struct FilesPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                Label("Files", systemImage: "folder").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Theme.text)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(Theme.chip, in: RoundedRectangle(cornerRadius: 5))
+            HStack(spacing: 10) {
+                HStack(spacing: 4) { RightTabs() }
                 Button { searching.toggle(); if !searching { filter = "" } } label: { Image(systemName: "magnifyingglass") }
                     .foregroundStyle(searching ? Theme.text : Theme.dim).help("Filter by name")
                 Button { cache = [:] } label: { Image(systemName: "arrow.clockwise") }.help("Reload")

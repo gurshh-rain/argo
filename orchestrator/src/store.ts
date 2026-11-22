@@ -65,6 +65,7 @@ export function save(run: Run) {
 }
 
 export function flush(project: string) {
+  if (!existsSync(dir(project))) return
   const mine = [...runs.values()].filter((r) => r.project === project)
   const tmp = dir(project, 'state.json.tmp')
   writeFileSync(tmp, JSON.stringify({ runs: mine, attention: attention.filter((a) => runs.get(a.runId)?.project === project) }, null, 2))

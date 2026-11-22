@@ -8,6 +8,8 @@ struct Member: Identifiable, Hashable {
     let name: String
     let kind: String        // claude | codex | devin | shell
     let cwd: String
+    /// The workspace this terminal belongs to: the project folder, or "" when there is none.
+    let workspace: String
 }
 
 /// How the terminals are arranged: a tree of side-by-side and stacked splits, as in cmux.
@@ -45,7 +47,94 @@ indirect enum Layout: Equatable {
 final class TeamHub: ObservableObject {
     @Published var members: [Member] = []
     @Published var focused: UUID?
-    @Published var layout: Layout?
+    /// Workspaces that have already been given their first terminal.
+    var opened = Set<String>()
+    /// One split tree per workspace.
+    @Published var layouts: [String: Layout] = [:]
+
+    /// Which coding CLI is running in each terminal right now (also when the user typed `claude` into a shell).
+    @Published var cli: [UUID: String] = [:]
+
+    func hasCLI(in ws: String) -> Bool { members(in: ws).contains { cli[$0.id] != nil && !exited.contains($0.id) } }
+
+    /// Looks at the processes under each terminal's shell.
+    func detectCLIs() async {
+        var found: [UUID: String] = [:]
+        let shells = members.filter { $0.kind == "shell" && !exited.contains($0.id) }
+        for m in members where m.kind != "shell" && !exited.contains(m.id) { found[m.id] = m.kind }
+        if !shells.isEmpty {
+            let pids = shells.compactMap { m in views[m.id].map { (m.id, $0.process.shellPid) } }
+            let table = await Task.detached { () -> [(Int32, Int32, String)] in
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/bin/ps")
+                p.arguments = ["-axo", "pid=,ppid=,comm="]
+                let pipe = Pipe()
+                p.standardOutput = pipe
+                guard (try? p.run()) != nil else { return [] }
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                return String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { line in
+                    let f = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+                    guard f.count == 3, let pid = Int32(f[0]), let ppid = Int32(f[1]) else { return nil }
+                    return (pid, ppid, (String(f[2]) as NSString).lastPathComponent)
+                }
+            }.value
+            for (id, shell) in pids {
+                var frontier = [shell], seen = Set<Int32>()
+                while let p = frontier.popLast(), found[id] == nil {
+                    guard seen.insert(p).inserted else { continue }
+                    for row in table where row.1 == p {
+                        if ["claude", "devin", "codex"].contains(row.2) { found[id] = row.2; break }
+                        frontier.append(row.0)
+                    }
+                }
+            }
+        }
+        if found != cli { cli = found }
+    }
+
+    /// Gives each subtask that is waiting for a terminal to a free one running the right CLI, and types the assignment into it.
+    func dispatch(store: Store) async {
+        await detectCLIs()
+        guard let runs = store.state?.runs else { return }
+        for run in runs where run.isActive {
+            let ws = store.workspace(of: run)
+            // a terminal is busy while a subtask it was given has not reported back
+            let busy = Set(store.runs(in: ws).flatMap(\.tasks).filter { $0.delegate?.state == "sent" }.compactMap(\.terminal))
+            var taken = busy
+            // a subtask whose terminal has gone away is offered to another terminal
+            for t in run.tasks where t.delegate?.state == "sent" {
+                if !members(in: ws).contains(where: { $0.name == t.terminal && !exited.contains($0.id) }) {
+                    let _: Ignored? = try? await store.daemon.request("POST", "runs/\(run.id)/tasks/\(t.id)/requeue")
+                }
+            }
+            for t in run.tasks where t.delegate?.state == "waiting" {
+                let a = t.effective
+                guard let m = members(in: ws).first(where: { cli[$0.id] == a.agent && !taken.contains($0.name) && !exited.contains($0.id) }),
+                      let v = views[m.id] else { continue }
+                taken.insert(m.name)
+                struct Claim: Decodable { let line: String }
+                guard let c: Claim = try? await store.daemon.request("POST", "runs/\(run.id)/tasks/\(t.id)/claim", body: ["terminal": m.name]) else { continue }
+                // Claude Code can switch model mid-session, so the difficulty-based model applies in a terminal too
+                if a.agent == "claude", let model = a.model, !model.isEmpty {
+                    v.send(txt: "/model \(model)")
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    v.send(txt: "\r")
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                }
+                v.send(txt: c.line)
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                v.send(txt: "\r")
+            }
+        }
+    }
+
+    /// The visible text of every terminal (for headless checks).
+    func dumpText() -> String {
+        members.map { m in "===== \(m.name) [\(cli[m.id] ?? "-")]\n" + (views[m.id].map { String(decoding: $0.getTerminal().getBufferAsData(), as: UTF8.self) } ?? "") }.joined(separator: "\n")
+    }
+
+    func members(in ws: String) -> [Member] { members.filter { $0.workspace == ws } }
+    func closeAll(in ws: String) { for m in members(in: ws) { close(m.id) } }
     @Published var ringing = Set<UUID>()
     @Published var exited = Set<UUID>()
     private var views: [UUID: LocalProcessTerminalView] = [:]
@@ -58,12 +147,15 @@ final class TeamHub: ObservableObject {
     /// Opens a terminal. It splits off `beside` (default: the focused pane), to the right or below.
     func add(kind: String, project: String, beside: UUID? = nil, horizontal: Bool = true) {
         let cwd = project.isEmpty ? NSHomeDirectory() : project
-        let n = members.filter { $0.kind == kind }.count + 1
+        let n = (members.filter { $0.kind == kind && $0.workspace == project }.map { Int($0.name.split(separator: " ").last ?? "") ?? 0 }.max() ?? 0) + 1
         let label = Self.kinds.first { $0.id == kind }?.label ?? kind
-        let m = Member(name: "\(label) \(n)", kind: kind, cwd: cwd)
+        let m = Member(name: "\(label) \(n)", kind: kind, cwd: cwd, workspace: project)
         members.append(m)
-        if let target = beside ?? focused, let l = layout { layout = l.inserting(m.id, beside: target, horizontal: horizontal) }
-        else { layout = .leaf(m.id) }
+        // split off the chosen pane, else the focused one if it is in this workspace, else the last one here
+        let mine = members(in: project).dropLast().map(\.id)
+        let target = beside ?? (focused.flatMap { mine.contains($0) ? $0 : nil }) ?? mine.last
+        if let target, let l = layouts[project] { layouts[project] = l.inserting(m.id, beside: target, horizontal: horizontal) }
+        else { layouts[project] = .leaf(m.id) }
         focused = m.id
         writeRoster(project: cwd)
         let v = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
@@ -90,8 +182,9 @@ final class TeamHub: ObservableObject {
     func close(_ id: UUID) {
         views[id]?.terminate()
         views[id] = nil; delegates[id] = nil
+        let ws = members.first { $0.id == id }?.workspace ?? ""
         members.removeAll { $0.id == id }
-        layout = layout?.removing(id)
+        layouts[ws] = layouts[ws]?.removing(id)
         ringing.remove(id); exited.remove(id)
         if focused == id { focused = members.last?.id }
         if let p = members.first?.cwd { writeRoster(project: p) }
@@ -155,6 +248,12 @@ struct TerminalPane: View {
             Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(Theme.text)
             Text(member.name).font(.system(size: 12)).foregroundStyle(Theme.text)
             if hub.exited.contains(member.id) { Chip(text: "exited") }
+            if let job = store.runs(in: member.workspace).flatMap(\.tasks).first(where: { $0.terminal == member.name && $0.delegate?.state == "sent" }) {
+                StatusDot(status: "running")
+                Text("\(job.id): \(job.title)").font(.system(size: 11)).foregroundStyle(Theme.ring).lineLimit(1)
+            } else if let c = hub.cli[member.id], member.kind == "shell" {
+                Chip(text: c)
+            }
             Button { hub.close(member.id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
                 .buttonStyle(.plain).foregroundStyle(Theme.dim).help("Remove from the team")
         } trailing: {
@@ -162,14 +261,14 @@ struct TerminalPane: View {
             // cmux's pane buttons: new terminal (pick an agent), split right, split down
             Menu {
                 ForEach(TeamHub.kinds, id: \.id) { k in
-                    Button("New \(k.label) terminal") { hub.add(kind: k.id, project: member.cwd, beside: member.id) }
+                    Button("New \(k.label) terminal") { hub.add(kind: k.id, project: member.workspace, beside: member.id) }
                         .disabled(k.bin != nil && !(store.agent(k.id)?.installed ?? true))
                 }
             } label: { Image(systemName: "apple.terminal") }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("New terminal beside this one")
-            Button { hub.add(kind: "shell", project: member.cwd, beside: member.id, horizontal: true) } label: { Image(systemName: "square.split.2x1") }
+            Button { hub.add(kind: "shell", project: member.workspace, beside: member.id, horizontal: true) } label: { Image(systemName: "square.split.2x1") }
                 .help("Split right: open a terminal beside this one")
-            Button { hub.add(kind: "shell", project: member.cwd, beside: member.id, horizontal: false) } label: { Image(systemName: "square.split.1x2") }
+            Button { hub.add(kind: "shell", project: member.workspace, beside: member.id, horizontal: false) } label: { Image(systemName: "square.split.1x2") }
                 .help("Split down: open a terminal below this one")
         } content: {
             if let v = hub.view(member.id) { TerminalHost(view: v).padding(4).background(Theme.pane) }
@@ -177,39 +276,6 @@ struct TerminalPane: View {
         .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim).tint(Theme.dim)
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded { hub.focus(member.id) })
-    }
-}
-
-struct TeamView: View {
-    @EnvironmentObject var hub: TeamHub
-    @EnvironmentObject var store: Store
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(Theme.dim)
-                Text(store.project.isEmpty ? "~" : (store.project as NSString).lastPathComponent).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.text)
-                Text("\(hub.members.count) terminal\(hub.members.count == 1 ? "" : "s")")
-                    .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
-                Spacer()
-                AddMemberMenu()
-                if store.filesHidden {
-                    Button { store.filesHidden = false } label: { Image(systemName: "sidebar.right") }
-                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Show files")
-                }
-            }
-            .padding(.leading, store.sidebarHidden ? 110 : 10).padding(.trailing, 10).frame(height: 30).background(Theme.bg)
-            HLine()
-            if hub.members.isEmpty {
-                VStack(spacing: 8) {
-                    Text("No terminals open").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.text)
-                    Text("Open a terminal, then split it to run Claude, Devin or Codex side by side in your project. They share the record in .argo/.")
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.dim).multilineTextAlignment(.center).frame(maxWidth: 480)
-                    AddMemberMenu().padding(.top, 6)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                if let l = hub.layout { LayoutView(node: l) }
-            }
-        }
     }
 }
 
@@ -222,13 +288,17 @@ struct LayoutView: View {
         case .leaf(let id):
             if let m = hub.members.first(where: { $0.id == id }) { TerminalPane(member: m) }
         case .split(let horizontal, let kids):
-            let stack = horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
-            stack {
-                ForEach(Array(kids.enumerated()), id: \.offset) { i, k in
-                    if i > 0 { if horizontal { VLine() } else { HLine() } }
-                    LayoutView(node: k)
-                }
-            }
+            SplitStack(horizontal: horizontal, keys: kids.map(\.key)) { i in LayoutView(node: kids[i]) }
+        }
+    }
+}
+
+extension Layout {
+    /// Stable identity for remembering pane sizes: a terminal's id, or a split's first terminal.
+    var key: String {
+        switch self {
+        case .leaf(let id): return id.uuidString
+        case .split(let h, let kids): return (h ? "h:" : "v:") + (kids.first?.key ?? "")
         }
     }
 }
@@ -239,7 +309,7 @@ struct AddMemberMenu: View {
     var body: some View {
         Menu {
             ForEach(TeamHub.kinds, id: \.id) { k in
-                Button(k.label) { hub.add(kind: k.id, project: store.project); store.showTeam = true }
+                Button(k.label) { hub.add(kind: k.id, project: store.project) }
                     .disabled(k.bin != nil && !(store.agent(k.id)?.installed ?? true))
             }
         } label: { Label("Add member", systemImage: "plus") }

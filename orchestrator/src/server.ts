@@ -108,11 +108,12 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
     // no project means a research run in a scratch folder; the phone falls back to the most recent project
     const chosen = b.project ?? (b.research ? '' : loadConfig().projects[0] || '')
     const project = chosen ? resolvePath(String(chosen)) : ''
-    return engine.startRun(project, String(b.goal || ''), { constraints: b.constraints, autoApprove: b.autoApprove })
+    return engine.startRun(project, String(b.goal || ''), { constraints: b.constraints, autoApprove: b.autoApprove, terminals: !!b.terminals })
   }
   if (p[0] === 'runs' && p[1]) {
     const r = run(p[1])
     if (m === 'GET' && at('runs', null)) return r
+    if (m === 'DELETE' && at('runs', null)) return engine.deleteRun(r)
     if (m === 'GET' && at('runs', null, 'logs')) {
       const tail = Number(url.searchParams.get('tail')) || 300
       return Object.fromEntries(['orchestrator', ...r.tasks.map((t) => t.id)].map((id) => [id, readLog(r, id, tail)]))
@@ -128,6 +129,9 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
       const b = await body(req)
       return engine.override(r, p[3], b.clear ? null : { agent: b.agent, model: b.model, reasoning: b.reasoning })
     }
+    if (m === 'POST' && at('runs', null, 'tasks', null, 'claim')) return engine.claim(r, p[3], String((await body(req)).terminal || 'terminal'))
+    if (m === 'POST' && at('runs', null, 'tasks', null, 'requeue')) return engine.requeue(r, p[3]), r
+    if (m === 'POST' && at('runs', null, 'tasks', null, 'background')) return engine.runInBackground(r, p[3]), r
     if (m === 'POST' && at('runs', null, 'tasks', null, 'retry')) return engine.retry(r, p[3], (await body(req)).instruction), r
   }
   if (m === 'POST' && at('attention', null, 'resolve')) {
