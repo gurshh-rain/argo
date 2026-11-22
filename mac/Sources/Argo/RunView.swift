@@ -1,62 +1,19 @@
 import SwiftUI
 
-struct RunView: View {
-    @EnvironmentObject var store: Store
-    let run: Run
-    @State private var inspector = "Record"
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            HLine()
-            HStack(spacing: 0) {
-                PaneGrid(run: run)
-                VLine()
-                Inspector(run: run, tab: $inspector).frame(width: 300)
-            }
-        }
-    }
-
-    var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(Theme.dim)
-            Text(run.projectName).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.text)
-            StatusDot(status: run.status)
-            Text(run.hasRepo ? "\(run.status.pretty) · \(run.branch)" : "\(run.status.pretty) · no repo").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
-            Spacer()
-            if run.status == "awaiting_approval" {
-                Text("Review the plan. Click any agent label to override it.").font(.system(size: 11)).foregroundStyle(Theme.amber)
-                Button("Approve & run") { store.runAction("approve") }.buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: .command)
-            }
-            if run.hasRepo, ["done", "needs_attention"].contains(run.status), run.report != nil {
-                Button(run.applied == true ? "Applied" : "Merge into \(run.baseBranch)") { store.runAction("apply") }.disabled(run.applied == true)
-            }
-            if run.isActive || run.status == "awaiting_approval" { Button("Cancel") { store.runAction("cancel") } }
-        }
-        .controlSize(.small).padding(.leading, store.sidebarHidden ? 110 : 10).padding(.trailing, 10).frame(height: 30)
-        .background(Theme.bg)
-    }
-}
-
 struct Inspector: View {
     @EnvironmentObject var store: Store
     let run: Run
-    @Binding var tab: String
+    var tab: String { store.rightTab }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                ForEach(["Record", "Report"], id: \.self) { t in
-                    Button { tab = t } label: {
-                        Label(t, systemImage: t == "Record" ? "folder" : "checklist")
-                            .font(.system(size: 11.5, weight: .medium)).foregroundStyle(tab == t ? Theme.text : Theme.dim)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(tab == t ? Theme.chip : .clear, in: RoundedRectangle(cornerRadius: 5))
-                    }.buttonStyle(.plain)
-                }
+                RightTabs()
                 Spacer()
+                Button { store.filesHidden = true } label: { Image(systemName: "sidebar.right") }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Hide panel")
             }
-            .padding(.horizontal, 8).frame(height: 28)
+            .padding(.horizontal, 8).frame(height: 30)
             HLine()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -147,15 +104,32 @@ struct Inspector: View {
     }
 }
 
+/// Files always; Record and Report when a run is showing.
+struct RightTabs: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        ForEach(store.run == nil ? ["Files"] : ["Files", "Record", "Report"], id: \.self) { t in
+            let on = store.rightTab == t || (store.run == nil && t == "Files")
+            Button { store.rightTab = t } label: {
+                Text(t).fixedSize()
+                    .font(.system(size: 11.5, weight: .medium)).foregroundStyle(on ? Theme.text : Theme.dim)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(on ? Theme.chip : .clear, in: RoundedRectangle(cornerRadius: 5))
+            }.buttonStyle(.plain)
+        }
+    }
+}
+
 struct Composer: View {
     @EnvironmentObject var store: Store
+    @EnvironmentObject var hub: TeamHub
     @State private var text = ""
     @State private var forceNew = false
-    var followup: Bool { !forceNew && !store.showTeam && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
+    var followup: Bool { !forceNew && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
 
     var body: some View {
         HStack(spacing: 8) {
-            if store.run != nil && !store.showTeam {
+            if store.run != nil {
                 Picker("", selection: $forceNew) {
                     Text("Follow-up").tag(false)
                     Text("New task").tag(true)
@@ -176,7 +150,7 @@ struct Composer: View {
     func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        if followup { store.instruct(t) } else { store.newRun(t); forceNew = false }
+        if followup { store.instruct(t) } else { store.newRun(t, terminals: hub.hasCLI(in: store.project)); forceNew = false }
         text = ""
     }
 }

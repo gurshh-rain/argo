@@ -110,3 +110,50 @@ test('a run needs no repo: research runs share a scratch folder and report an an
   assert.ok(existsSync(join(plain, 'c.txt')), 'a folder that is not a repo is worked in directly')
   assert.deepEqual(inPlace.report!.changedFiles.sort(), ['a.txt', 'b.txt', 'c.txt'])
 })
+
+test('deleting a run removes its record and worktrees but keeps a branch with unmerged work', async () => {
+  const project = repo()
+  const run = await engine.startRun(project, 'make three files', { autoApprove: true })
+  await until(() => run.status === 'done')
+  const branches = () => execFileSync('git', ['branch', '--list', 'argo/*'], { cwd: project, encoding: 'utf8' }).trim().split('\n').filter(Boolean).map((b) => b.trim())
+  const out = await engine.deleteRun(run)
+  assert.equal(out.keptBranch, run.branch, 'unmerged work is not thrown away')
+  assert.deepEqual(branches(), [run.branch])
+  assert.ok(!runs.has(run.id))
+  assert.ok(!readFileSync(join(project, '.argo', 'state.json'), 'utf8').includes(run.id))
+
+  const merged = await engine.startRun(project, 'make three files', { autoApprove: true })
+  await until(() => merged.status === 'done')
+  await engine.applyRun(merged)
+  assert.equal((await engine.deleteRun(merged)).keptBranch, undefined)
+  assert.deepEqual(branches(), [run.branch], 'a merged run leaves no branches behind')
+
+  const research = await engine.startRun('', 'compare things', { autoApprove: true })
+  await until(() => research.status === 'done')
+  await engine.deleteRun(research)
+  assert.ok(!existsSync(research.project), 'the scratch folder goes with the run')
+})
+
+test('with terminals on, subtasks others depend on wait for a terminal; final ones run in the background', async () => {
+  const { writeFileSync } = await import('node:fs')
+  const run = await engine.startRun('', 'compare three things', { autoApprove: true, terminals: true })
+  await until(() => run.tasks.filter((t) => t.delegate?.state === 'waiting').length === 2)
+  assert.equal(run.tasks[2].status, 'pending')
+  // t1: a terminal claims it and the agent there writes its result file
+  const sent = engine.claim(run, 't1', 'Claude 1')
+  assert.match(sent.line, /prompts\/.*-t1\.md/)
+  assert.match(readFileSync(run.tasks[0].delegate!.promptFile, 'utf8'), /write your complete final message to .*results/)
+  assert.throws(() => engine.claim(run, 't1', 'Claude 2'), /not waiting/)
+  engine.requeue(run, 't1') // that terminal was closed: the subtask goes back to waiting
+  assert.equal(run.tasks[0].delegate!.state, 'waiting')
+  engine.claim(run, 't1', 'Claude 1')
+  writeFileSync(run.tasks[0].delegate!.resultFile, 'findings from the terminal\n')
+  // t2: the user chooses not to wait for a terminal
+  engine.runInBackground(run, 't2')
+  await until(() => run.status === 'done')
+  assert.equal(run.tasks[0].terminal, 'Claude 1')
+  assert.equal(run.tasks[0].summary, 'findings from the terminal')
+  assert.equal(run.tasks[0].delegate, undefined)
+  assert.equal(run.tasks[1].terminal, undefined)
+  assert.equal(run.tasks[2].terminal, undefined, 'the final subtask never waits for a terminal')
+})

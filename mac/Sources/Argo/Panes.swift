@@ -38,11 +38,11 @@ struct PaneFrame<Tab: View, Trailing: View, Content: View>: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 HStack(spacing: 6) { tab }
-                    .padding(.horizontal, 10).frame(height: 28)
+                    .padding(.horizontal, 10).frame(height: 28).frame(minWidth: 90)
                     .overlay(alignment: .top) { Rectangle().fill(active || ring ? Theme.ring : Color.clear).frame(height: 2) }
                     .overlay(alignment: .trailing) { VLine() }
                 Spacer(minLength: 6)
-                HStack(spacing: 6) { trailing }.padding(.trailing, 8)
+                HStack(spacing: 6) { trailing }.fixedSize().padding(.trailing, 8).layoutPriority(1)
             }
             .frame(height: 28)
             HLine()
@@ -120,6 +120,7 @@ struct TaskPane: View {
             StatusDot(status: task.status)
         } trailing: {
             AssignmentMenu(task: task)
+            ClosePane(key: "\(run.id)/\(task.id)")
         } content: {
             VStack(spacing: 0) {
                 let lines = store.logs[task.id] ?? []
@@ -155,33 +156,29 @@ struct TaskPane: View {
     }
 }
 
-struct PaneGrid: View {
+struct ClosePane: View {
+    @EnvironmentObject var store: Store
+    let key: String
+    var body: some View {
+        Button { store.closedPanes.insert(key) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
+            .buttonStyle(.plain).foregroundStyle(Theme.dim).help("Remove this pane (bring it back from the run's right-click menu)")
+    }
+}
+
+struct OrchestratorPane: View {
     @EnvironmentObject var store: Store
     let run: Run
     var body: some View {
-        let cols = run.tasks.count <= 1 ? 1 : (run.tasks.count <= 4 ? 2 : 3)
-        let rows = stride(from: 0, to: run.tasks.count, by: cols).map { Array(run.tasks[$0..<min($0 + cols, run.tasks.count)]) }
-        VStack(spacing: 0) {
-            ForEach(rows, id: \.self) { row in
-                HStack(spacing: 0) {
-                    ForEach(row) { t in
-                        TaskPane(run: run, task: t)
-                        if t.id != row.last?.id { VLine() }
-                    }
-                }
-                HLine()
+        PaneFrame {
+            Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(Theme.text)
+            Text("orchestrator").font(.system(size: 12)).foregroundStyle(Theme.text)
+        } trailing: {
+            if let p = run.planner {
+                Text("planned by \(store.agent(p.agent)?.label ?? "?") · \(p.model ?? "")").font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
             }
-            PaneFrame {
-                Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(Theme.text)
-                Text("orchestrator").font(.system(size: 12)).foregroundStyle(Theme.text)
-            } trailing: {
-                if let p = run.planner {
-                    Text("planned by \(store.agent(p.agent)?.label ?? "?") · \(p.model ?? "")").font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
-                }
-            } content: {
-                LogView(lines: (store.logs["orchestrator"] ?? []).filter { !$0.hasPrefix("{") })
-            }
-            .frame(height: run.tasks.isEmpty ? nil : 150)
+            ClosePane(key: "\(run.id)/orchestrator")
+        } content: {
+            LogView(lines: (store.logs["orchestrator"] ?? []).filter { !$0.hasPrefix("{") })
         }
     }
 }

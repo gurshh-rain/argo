@@ -1,9 +1,9 @@
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import type { Assignment, Attention, CheckResult, Run, Task } from './types.ts'
-import { loadConfig, WORKSPACES } from './config.ts'
+import { loadConfig, WORKSPACES, WORKTREES } from './config.ts'
 import { runs, attention, save, emit, ensureProject, loadProject, renderMemory, ingestNotes, appendLog, assignment, dir, flush } from './store.ts'
-import { runAgent, spec, installed } from './agents.ts'
+import { runAgent, spec, installed, type RunResult } from './agents.ts'
 import * as g from './git.ts'
 import { lead, planPrompt, extractJson, tasksFromPlan, route, routeFollowup, reviewPrompt, defaultModel, harder, classify } from './planner.ts'
 
@@ -39,7 +39,7 @@ function touchedSince(root: string, since: number, at = root, out: string[] = []
 }
 
 // `project` may be empty (research or a question: a scratch folder is used) or a folder that is not a git repo.
-export async function startRun(project: string, goal: string, opts: { constraints?: string[]; autoApprove?: boolean } = {}): Promise<Run> {
+export async function startRun(project: string, goal: string, opts: { constraints?: string[]; autoApprove?: boolean; terminals?: boolean } = {}): Promise<Run> {
   if (!goal.trim()) throw new Error('Empty task')
   const planner = lead()
   const id = 'r' + Date.now().toString(36)
@@ -50,7 +50,7 @@ export async function startRun(project: string, goal: string, opts: { constraint
   const { baseCommit, baseBranch, dirty } = isolated ? await g.initRun(project, id) : { baseCommit: '', baseBranch: '', dirty: 0 }
   ensureProject(project, !scratch)
   const run: Run = {
-    id, project, goal: goal.trim(), constraints: opts.constraints || [], status: 'planning', createdAt: Date.now(), isolated,
+    id, project, goal: goal.trim(), constraints: opts.constraints || [], status: 'planning', createdAt: Date.now(), isolated, terminals: !!opts.terminals,
     baseBranch, baseCommit, branch: isolated ? g.mainBranch(id) : '', planner, tasks: [], decisions: [], followups: [],
   }
   if (!isolated && !scratch) run.decisions.push({ at: Date.now(), by: 'orchestrator', text: 'This folder is not a git repository, so agents work in it directly and share it; their edits are not isolated from each other and there is nothing to merge or undo.' })
@@ -142,7 +142,7 @@ function tick(run: Run) {
   }
 }
 
-function workPrompt(run: Run, t: Task, a: Assignment, extra?: string) {
+function workPrompt(run: Run, t: Task, a: Assignment, extra?: string, resultFile?: string) {
   const notes = dir(run.project, 'notes', `${run.id}-${t.id}.md`)
   return `You are ${spec(a.agent)?.label}, one member of a team of coding agents coordinated by Argo. Other agents are working on sibling subtasks right now.
 
@@ -158,7 +158,7 @@ Run the existing phone script described there and use its transcript as the answ
 ` : ''}
 ## Rules
 ${run.isolated
-    ? `- Keep project source edits inside the current directory. It is your own git worktree (branch ${t.branch}), already containing the merged work of the subtasks you depend on. The phone skill may use its existing backend and private temporary files without changing backend code or credentials.
+    ? `- Work only inside the current directory. It is your own git worktree (branch ${t.branch}), already containing the merged work of the subtasks you depend on.${loadConfig().settings.callOnAttention ? ' The phone skill may use its existing backend and private temporary files outside this directory without changing backend code or credentials.' : ''}
 - Stay within your subtask's files so your changes merge cleanly with the others.
 - Do not commit, push, or switch branches. The orchestrator commits and merges your work when you finish.
 - If you make a decision another agent must know about (an interface, a file name, a convention), append one bullet per decision to ${notes}
@@ -167,7 +167,10 @@ ${run.isolated
 - You may read files, run commands and search the web as your subtask requires. Say where each important claim comes from.
 - Record each key finding or decision the other agents need: append one bullet per finding to ${notes}
 - The subtasks you depend on have finished; their full outputs are at the "full output" paths in the shared record. Read them rather than redoing their work.
-- Your final message is your deliverable: give the complete result of your subtask, then note anything you could not establish.`}`
+- Your final message is your deliverable: give the complete result of your subtask, then note anything you could not establish.`}${resultFile ? `
+
+## You are in a terminal the user is watching
+${run.isolated ? `- Your working directory for this subtask is ${t.worktree} (not the directory this session started in). cd there for every command and only touch files inside it.${loadConfig().settings.callOnAttention ? ' The phone skill may use its existing backend and private temporary files outside this directory; also write the required result file below.' : ''}\n` : ''}- When you have finished, write your complete final message to ${resultFile}. Writing that file is how the orchestrator learns you are done, so do it last, and do it even if you could not finish (say why in it).` : ''}`
 }
 
 async function execTask(run: Run, t: Task, extra?: { instruction?: string; escalate?: boolean }) {
@@ -189,13 +192,17 @@ async function execTask(run: Run, t: Task, extra?: { instruction?: string; escal
   aborts.set(key(run, t.id), ac)
   const phoneQuestions = loadConfig().settings.callOnAttention
   const phoneBackend = process.env.ARGO_PHONE_DEMO_DIR || '/Users/gz/Documents/codevisor-call-demo'
-  const res = await runAgent({
-    ...a, cwd: t.worktree, prompt: workPrompt(run, t, a, extra?.instruction), escalate: extra?.escalate,
+  const background = () => runAgent({
+    ...a, cwd: t.worktree!, prompt: workPrompt(run, t, a, extra?.instruction), escalate: extra?.escalate,
     resume: extra?.instruction && a.agent === 'claude' ? t.sessionId : undefined,
     addDirs: [dir(run.project, 'notes'), ...(phoneQuestions && existsSync(phoneBackend) ? [phoneBackend] : [])],
     phoneQuestions, signal: ac.signal, onLine: out,
     stuckMs: 240_000, onStuck: () => raise(run, 'stuck', 'No output for four minutes.', t.id),
   })
+  // Work that other subtasks build on goes to a terminal the user has open, so they can watch and steer it.
+  // Final subtasks (nothing depends on them) stay in the background and show as their own pane.
+  const toTerminal = run.terminals && !t.headless && run.tasks.some((x) => x.dependsOn.includes(t.id))
+  const res = toTerminal ? await viaTerminal(run, t, a, extra?.instruction, ac.signal, out, background) : await background()
   aborts.delete(key(run, t.id))
   t.finishedAt = Date.now()
   t.sessionId = res.sessionId || t.sessionId
@@ -229,6 +236,70 @@ async function execTask(run: Run, t: Task, extra?: { instruction?: string; escal
   t.status = 'merging'
   save(run)
   await g.serial(run.id, () => integrate(run, t, a, out))
+}
+
+// Hand a subtask to an interactive terminal: write the instructions to a file, wait for the Mac app to
+// claim it for a terminal running the right CLI, then wait for the agent to write its result file.
+async function viaTerminal(run: Run, t: Task, a: Assignment, instruction: string | undefined, signal: AbortSignal, out: (l: string) => void, background: () => Promise<RunResult>): Promise<RunResult> {
+  mkdirSync(dir(run.project, 'prompts'), { recursive: true })
+  const promptFile = dir(run.project, 'prompts', `${run.id}-${t.id}.md`)
+  const resultFile = dir(run.project, 'results', `${run.id}-${t.id}.md`)
+  rmSync(resultFile, { force: true })
+  writeFileSync(promptFile, workPrompt(run, t, a, instruction, resultFile))
+  t.delegate = { state: 'waiting', promptFile, resultFile }
+  t.terminal = undefined
+  save(run)
+  out(`Waiting for an open ${spec(a.agent)?.label} terminal in this workspace`)
+  let size = -1
+  try {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 700))
+      if (signal.aborted) return { ok: false, text: '', denials: [], error: 'cancelled' }
+      if (t.headless) {
+        out('Running in the background instead')
+        t.delegate = undefined
+        save(run)
+        return background()
+      }
+      const st = statSync(resultFile, { throwIfNoEntry: false })
+      // done once the file exists and has stopped growing
+      if (st && st.size > 0 && st.size === size) return { ok: true, text: readFileSync(resultFile, 'utf8').trim(), denials: [] }
+      size = st ? st.size : -1
+    }
+  } finally {
+    t.delegate = undefined
+  }
+}
+
+// The Mac app found a free terminal for a waiting subtask. Returns what to type into it.
+export function claim(run: Run, taskId: string, terminal: string) {
+  const t = task(run, taskId)
+  if (t.delegate?.state !== 'waiting') throw new Error(`${taskId} is not waiting for a terminal`)
+  t.delegate.state = 'sent'
+  t.terminal = terminal
+  appendLog(run, t.id, `Sent to ${terminal}`)
+  save(run)
+  const a = assignment(t)
+  return {
+    agent: a.agent, model: a.model,
+    line: `You have been assigned subtask ${t.id} ("${t.title}") by the Argo orchestrator. Read ${t.delegate.promptFile} and carry out the instructions in it exactly, including writing your result file at the end.`,
+  }
+}
+
+// The terminal a subtask was sent to has closed before reporting back: offer the subtask to another one.
+export function requeue(run: Run, taskId: string) {
+  const t = task(run, taskId)
+  if (t.delegate?.state !== 'sent') return
+  appendLog(run, t.id, `${t.terminal || 'The terminal'} closed before finishing; waiting for another terminal`)
+  t.delegate.state = 'waiting'
+  t.terminal = undefined
+  save(run)
+}
+
+export function runInBackground(run: Run, taskId: string) {
+  const t = task(run, taskId)
+  t.headless = true
+  save(run)
 }
 
 async function integrate(run: Run, t: Task, a: Assignment, out: (l: string) => void) {
@@ -388,6 +459,32 @@ export async function applyRun(run: Run) {
   run.applied = true
   save(run)
   return out
+}
+
+// Remove a run and its record. Worktrees always go. A branch is deleted only when nothing would be lost:
+// it was already merged into the user's branch, or it has no commits of its own. Otherwise it is kept and named.
+export async function deleteRun(run: Run): Promise<{ keptBranch?: string }> {
+  if (!['done', 'needs_attention', 'failed', 'cancelled'].includes(run.status) || run.tasks.some((t) => t.status === 'running' || t.status === 'merging')) cancel(run)
+  let keptBranch: string | undefined
+  if (run.isolated && existsSync(run.project)) {
+    for (const id of ['main', ...run.tasks.map((t) => t.id)]) await g.removeTree(run.project, join(WORKTREES, run.id, id))
+    const ahead = (await g.git(run.project, 'rev-list', '--count', `${run.baseCommit}..${run.branch}`)).out.trim()
+    const safe = run.applied || ahead === '0'
+    const branches = (await g.git(run.project, 'for-each-ref', '--format=%(refname:short)', `refs/heads/argo/${run.id}/`)).out.split('\n').filter(Boolean)
+    for (const b of branches) if (safe || b !== run.branch) await g.git(run.project, 'branch', '-D', b)
+    if (!safe && branches.includes(run.branch)) keptBranch = run.branch
+  }
+  rmSync(join(WORKTREES, run.id), { recursive: true, force: true })
+  for (const sub of ['logs', 'results', 'notes'])
+    if (existsSync(dir(run.project, sub)))
+      for (const f of readdirSync(dir(run.project, sub))) if (f.startsWith(run.id + '-')) rmSync(dir(run.project, sub, f), { force: true })
+  runs.delete(run.id)
+  for (let i = attention.length - 1; i >= 0; i--) if (attention[i].runId === run.id) attention.splice(i, 1)
+  // a scratch folder exists only for this run
+  if (run.project === join(WORKSPACES, run.id)) rmSync(run.project, { recursive: true, force: true })
+  else flush(run.project)
+  emit('run', run.id)
+  return { keptBranch }
 }
 
 export function boot() {

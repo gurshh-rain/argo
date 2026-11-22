@@ -33,6 +33,8 @@ struct TaskItem: Codable, Identifiable, Hashable {
     let override: Assignment?
     let ranWith: Assignment?
     let branch: String?
+    let delegate: Delegate?
+    let terminal: String?
     let summary: String?
     let changedFiles: [String]
     let error: String?
@@ -43,8 +45,12 @@ struct TaskItem: Codable, Identifiable, Hashable {
     var effective: Assignment {
         ranWith ?? Assignment(agent: override?.agent ?? auto.agent, model: override?.model ?? auto.model, reasoning: override?.reasoning ?? auto.reasoning)
     }
+    /// Handed to one of the user's terminals rather than shown as its own pane.
+    var inTerminal: Bool { delegate != nil || terminal != nil }
     var canOverride: Bool { ["pending", "failed", "needs_attention"].contains(status) }
 }
+
+struct Delegate: Codable, Hashable { let state: String }
 
 struct Decision: Codable, Hashable { let at: Double; let by: String; let text: String }
 struct Followup: Codable, Hashable { let at: Double; let source: String; let text: String }

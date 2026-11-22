@@ -15,15 +15,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static func snapshotIfAsked() {
         let args = CommandLine.arguments
         guard let i = args.firstIndex(of: "--snapshot"), args.count > i + 1 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+        let delay = Double(ProcessInfo.processInfo.environment["ARGO_SNAPSHOT_DELAY"] ?? "") ?? 5
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             if let v = NSApp.windows.first(where: { $0.contentView != nil && $0.frame.width > 600 })?.contentView,
                let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
                 v.cacheDisplay(in: v.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[i + 1]))
             }
+            if let dump = AppDelegate.dump { try? dump().write(toFile: args[i + 1] + ".txt", atomically: true, encoding: .utf8) }
             NSApp.terminate(nil)
         }
     }
+    static var dump: (() -> String)?
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
@@ -32,28 +35,33 @@ struct ArgoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = Store()
     @StateObject private var hub = TeamHub()
+    @StateObject private var sizes = SplitSizes()
 
     var body: some Scene {
         WindowGroup("Argo") {
-            RootView().environmentObject(store).environmentObject(hub)
+            RootView().environmentObject(store).environmentObject(hub).environmentObject(sizes)
+                .task {
+                    // hand waiting subtasks to the user's terminals
+                    while !Task.isCancelled {
+                        await hub.dispatch(store: store)
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    }
+                }
                 .frame(minWidth: 1100, minHeight: 680)
                 .preferredColorScheme(.dark).tint(Theme.ring)
                 .onAppear {
                     store.start()
+                    AppDelegate.dump = { [hub] in hub.dumpText() }
                     // `ARGO_DEMO_TEAM=1` opens a few terminals at launch (for headless UI checks).
                     if ProcessInfo.processInfo.environment["ARGO_DEMO_TEAM"] != nil {
                         for k in ["claude", "devin", "shell"] { hub.add(kind: k, project: store.project, horizontal: k != "shell") }
-                        store.showTeam = true
-                    } else if hub.members.isEmpty {
-                        // one terminal is always there to start from; split it to add agents
-                        hub.add(kind: "shell", project: store.project)
                     }
                 }
         }
         .commands {
             CommandMenu("Team") {
                 ForEach(Array(TeamHub.kinds.enumerated()), id: \.offset) { i, k in
-                    Button("New \(k.label) terminal") { hub.add(kind: k.id, project: store.project); store.showTeam = true }
+                    Button("New \(k.label) terminal") { hub.add(kind: k.id, project: store.project) }
                         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .shift])
                 }
             }
@@ -76,19 +84,17 @@ struct RootView: View {
             VStack(spacing: 0) {
                 if let e = store.startupError {
                     message("Orchestrator unavailable", e)
-                } else if store.showTeam {
-                    TeamView()
-                } else if let run = store.run {
-                    RunView(run: run)
                 } else {
-                    message("Give your agents one task", "Argo plans it, splits it across \(store.installedAgents.map(\.label).joined(separator: ", ")), runs independent parts in parallel in isolated worktrees, then merges, checks and reports.")
+                    WorkspaceView()
                 }
                 Composer()
             }
             .background(Theme.bg)
-            if store.showTeam && !store.filesHidden && store.startupError == nil {
+            if !store.filesHidden && store.startupError == nil {
                 VLine()
-                FilesPanel().frame(width: 300)
+                Group {
+                    if let run = store.run, store.rightTab != "Files" { Inspector(run: run) } else { FilesPanel() }
+                }.frame(width: 300)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -98,6 +104,10 @@ struct RootView: View {
         .sheet(item: $sheet) { s in
             Group { if s == .settings { SettingsSheet() } else { MobileSheet() } }.environmentObject(store)
         }
+        .alert(store.confirm?.title ?? "", isPresented: Binding(get: { store.confirm != nil }, set: { if !$0 { store.confirm = nil } }), presenting: store.confirm) { c in
+            Button(c.button, role: .destructive) { c.action() }
+            Button("Cancel", role: .cancel) {}
+        } message: { c in Text(c.message) }
         .alert("Argo", isPresented: Binding(get: { store.banner != nil }, set: { if !$0 { store.banner = nil } })) {
             Button("OK") { store.banner = nil }
         } message: { Text(store.banner ?? "") }

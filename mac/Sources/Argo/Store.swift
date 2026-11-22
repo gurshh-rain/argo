@@ -8,24 +8,100 @@ final class Store: ObservableObject {
     @Published var logs: [String: [String]] = [:]
     @Published var selectedRun: String?
     @Published var project: String = UserDefaults.standard.string(forKey: "project") ?? ""
-    @Published var showTeam = true
     @Published var filesHidden = false
-    private var userClearedProject = false
     @Published var sidebarHidden = false
+    /// Right-hand panel: Files, or the selected run's Record / Report.
+    @Published var rightTab = "Files"
+    @Published var confirm: Confirm?
+    /// Run panes the user closed, as "<run>/<pane>".
+    @Published var closedPanes = Set<String>()
+    /// Folders the user has opened. "" is the no-project workspace (research).
+    @Published var workspaces: [String] = UserDefaults.standard.stringArray(forKey: "workspaces") ?? []
+    private var userClearedProject = false
+    private var hiddenRuns = Set<String>()
+    private var reported = Set<String>()
 
-    /// Back / forward in the sidebar: the workspace first, then each run.
-    func step(_ by: Int) {
-        let ids = state?.runs.map(\.id) ?? []
-        let cur = showTeam ? 0 : (ids.firstIndex(of: selectedRun ?? "").map { $0 + 1 } ?? 0)
-        let next = max(0, min(ids.count, cur + by))
-        showTeam = next == 0
-        if next > 0 { selectedRun = ids[next - 1] }
+    struct Confirm: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+        let button: String
+        let action: () -> Void
     }
+
+    /// A run belongs to the folder it works in; runs without a project share the "" workspace.
+    func workspace(of run: Run) -> String { run.isResearch ? "" : run.project }
+    func runs(in ws: String) -> [Run] { (state?.runs ?? []).filter { workspace(of: $0) == ws } }
+    func name(of ws: String) -> String { ws.isEmpty ? "No project" : (ws as NSString).lastPathComponent }
+
+    /// Every workspace worth showing: opened folders, the current one, and any with runs or terminals.
+    func workspaceList(terminals: [String]) -> [String] {
+        var out: [String] = []
+        for w in workspaces + [project] + (state?.runs ?? []).map(workspace(of:)) + terminals where !out.contains(w) { out.append(w) }
+        return out
+    }
+
+    func select(workspace ws: String) {
+        project = ws
+        userClearedProject = ws.isEmpty
+        UserDefaults.standard.set(ws, forKey: "project")
+        remember(ws)
+        selectedRun = runs(in: ws).first { !hiddenRuns.contains($0.id) }?.id
+        if selectedRun == nil { rightTab = "Files" }
+    }
+    private func remember(_ ws: String) {
+        guard !ws.isEmpty, !workspaces.contains(ws) else { return }
+        workspaces.append(ws)
+        UserDefaults.standard.set(workspaces, forKey: "workspaces")
+    }
+
+    /// Back / forward through the workspaces.
+    func step(_ by: Int, in list: [String]) {
+        guard let i = list.firstIndex(of: project), list.indices.contains(i + by) else { return }
+        select(workspace: list[i + by])
+    }
+    func show(run id: String) {
+        hiddenRuns.remove(id)
+        selectedRun = id
+    }
+    /// Closes the run's panes without deleting it; it stays in the run strip.
+    func hideRunPanes() {
+        if let id = selectedRun { hiddenRuns.insert(id) }
+        selectedRun = nil
+        rightTab = "Files"
+    }
+
+    func askDeleteRun(_ run: Run) {
+        let unmerged = run.hasRepo && run.applied != true && run.tasks.contains { !$0.changedFiles.isEmpty }
+        confirm = Confirm(
+            title: "Delete this run?",
+            message: "“\(run.goal.prefix(80))” and its record, logs and worktrees will be removed."
+                + (run.isActive ? " It is still running and will be cancelled." : "")
+                + (unmerged ? " Its work has not been merged; the branch \(run.branch) is kept so nothing is lost." : ""),
+            button: "Delete run"
+        ) { self.deleteRuns([run]) }
+    }
+    func deleteRuns(_ list: [Run]) {
+        act {
+            for r in list {
+                let _: Ignored = try await self.daemon.request("DELETE", "runs/\(r.id)")
+                if self.selectedRun == r.id { self.selectedRun = nil; self.rightTab = "Files" }
+            }
+        }
+    }
+    /// Removes a workspace from Argo: its terminals are closed by the caller, its runs deleted. The folder itself is untouched.
+    func forget(workspace ws: String) {
+        deleteRuns(runs(in: ws))
+        workspaces.removeAll { $0 == ws }
+        UserDefaults.standard.set(workspaces, forKey: "workspaces")
+        if project == ws { select(workspace: workspaces.first ?? "") }
+    }
+
     /// The bell jumps to the most recent run that needs attention.
     func jumpToAttention() {
         guard let a = state?.attention.last(where: { $0.kind != "completed" }) ?? state?.attention.last else { return }
-        selectedRun = a.runId
-        showTeam = false
+        if let r = state?.runs.first(where: { $0.id == a.runId }) { select(workspace: workspace(of: r)) }
+        show(run: a.runId)
     }
     @Published var banner: String?
     @Published var startupError: String?
@@ -57,8 +133,17 @@ final class Store: ObservableObject {
             let s: AppState = try await daemon.request("GET", "state")
             if s.runs != state?.runs || s.attention != state?.attention || s.settings != state?.settings || state == nil { state = s }
             startupError = nil
-            if selectedRun == nil || !s.runs.contains(where: { $0.id == selectedRun }) { selectedRun = s.runs.first?.id }
-            if project.isEmpty, !userClearedProject, let p = s.projects.first { project = p }
+            if project.isEmpty, !userClearedProject, workspaces.isEmpty, let p = s.projects.first { project = p }
+            remember(project)
+            // show the newest run of this workspace unless the user closed its panes
+            let mine = runs(in: project)
+            if !mine.contains(where: { $0.id == selectedRun }) { selectedRun = mine.first { !hiddenRuns.contains($0.id) }?.id }
+            // when a run's report arrives, bring it up once
+            if let r = run, r.report != nil, !reported.contains(r.id) {
+                if primed { rightTab = "Report"; filesHidden = false }
+                reported.insert(r.id)
+            }
+            for r in s.runs where r.report != nil && r.id != selectedRun && !primed { reported.insert(r.id) }
             for a in s.attention where !seenAttention.contains(a.id) {
                 seenAttention.insert(a.id)
                 if primed { notify(a) }
@@ -93,23 +178,23 @@ final class Store: ObservableObject {
         panel.canChooseFiles = false
         panel.prompt = "Use project"
         if panel.runModal() == .OK, let url = panel.url {
-            project = url.path
-            UserDefaults.standard.set(project, forKey: "project")
+            select(workspace: url.path)
         }
     }
 
-    func clearProject() {
-        project = ""
-        userClearedProject = true
-        UserDefaults.standard.removeObject(forKey: "project")
+    func clearProject() { select(workspace: "") }
+
+    func background(run: String, task: String) {
+        act { let _: Ignored = try await self.daemon.request("POST", "runs/\(run)/tasks/\(task)/background") }
     }
 
-    func newRun(_ goal: String) {
+    /// `terminals`: hand the subtasks other subtasks build on to the CLIs open in this workspace's terminals.
+    func newRun(_ goal: String, terminals: Bool = false) {
         act {
             // no project chosen: a research run in a scratch folder, no repo needed
-            let r: Run = try await self.daemon.request("POST", "runs", body: ["project": self.project, "goal": goal])
-            self.selectedRun = r.id
-            self.showTeam = false
+            let r: Run = try await self.daemon.request("POST", "runs", body: ["project": self.project, "goal": goal, "terminals": terminals])
+            self.show(run: r.id)
+            self.rightTab = "Record"
         }
     }
     func instruct(_ text: String) {
