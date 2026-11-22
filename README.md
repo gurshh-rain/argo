@@ -73,6 +73,10 @@ Outbound calls use ElevenLabs Agents with a Twilio number
    - `instruct` → `POST <phone address>/_server/hooks/voice/instruct`, body `{ "run_id": "{{run_id}}", "instruction": "<what the developer said>" }`
 4. In the Mac app's Settings, enter your phone number and enable calls.
 
+## Direct Twilio phone plan
+
+See the [Phone Call Usage and Agent Integration Plan](docs/phone-call-usage-plan.md) for the existing local phone demo, editable questions, transcript retrieval, tunnel reuse, and the proposed connection to Argo tasks. The direct Twilio adapter is planned and is not implemented in this branch.
+
 ## Tests
 
 ```sh
