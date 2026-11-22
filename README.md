@@ -1,1 +1,81 @@
-# yc-hacky
+# Argo
+
+Your AI coding team, controlled by voice. Give it one high-level task; it plans the work, routes each
+subtask to the coding CLI and model that suits it, runs independent subtasks in parallel in isolated
+git worktrees, merges, checks, reviews and reports. Check on it, or redirect it, by speaking from your phone.
+
+```
+mac/            Native macOS app (SwiftUI, cmux-style: vertical run tabs, split agent panes, notification rings)
+orchestrator/   Local daemon (Node, zero dependencies): planning, routing, worktrees, shared record, voice, calls
+web/            Wasp app: landing page + authenticated phone console (voice in, transcript confirm, spoken status)
+```
+
+## Run it
+
+Requirements: macOS 14+, Node 24+, git, and at least one of `claude`, `codex`, `devin` on your PATH.
+
+```sh
+mac/build.sh && open mac/build/Argo.app      # starts the orchestrator itself
+```
+
+Choose a project folder (a git repository), type a task, review the plan, click any agent label to
+override the agent, model or reasoning level for that subtask, then **Approve & run**.
+
+Phone:
+
+```sh
+npm i -g @wasp.sh/wasp-cli@0.26.1
+cd web && wasp install && wasp db migrate-dev
+./tunnel.sh          # needs cloudflared, or Tailscale running; prints the phone address
+./dev.sh             # or: local only, http://localhost:4318
+```
+
+On the phone: open the address and go to /app. There is no login: anyone who can reach the address can
+control your agents, so keep it on localhost or a private network (Tailscale).
+
+## How it works
+
+- **Orchestration.** The lead CLI produces a plan (subtasks, dependencies, an agent/model/reasoning
+  choice with a reason for each). Subtasks whose dependencies are met run concurrently, up to the
+  parallel limit. Each finished subtask is committed and merged into the run's integration branch
+  `argo/<run>/main`; if a merge conflicts, the agent that produced it is asked to resolve it.
+  Then checks run (configured, or detected from the repo), a different agent reviews the result, and
+  the report lists what is done and what still needs you. Nothing touches your checkout until you
+  click **Merge into <branch>**.
+- **Shared record.** `<project>/.argo/` holds `state.json` and `MEMORY.md`: goal, constraints,
+  follow-ups, decisions, each subtask's status, agent, model and changed files. Every agent gets it in
+  its prompt and can re-read the live file; agents record decisions in `.argo/notes/`, which the
+  orchestrator folds into the record. The directory is excluded via `.git/info/exclude`.
+- **Model controls.** Settings: default CLI (or Auto), a model per CLI, reasoning level, parallelism,
+  whether plans need approval. Per-subtask override from the pane header. Every pane, the record and
+  the phone show which agent and model did the work and whether it was an override.
+- **Attention.** A failed agent, a blocked command, four minutes of silence, a merge conflict or a
+  finished run raises a notification (blue ring, macOS notification, and a phone call when configured).
+  A follow-up while a subtask is blocked goes to that subtask ("approve" lets a blocked command run);
+  otherwise it becomes a new subtask on the run.
+- **Voice.** The phone records audio, ElevenLabs Scribe transcribes it, and the transcript is shown
+  and editable before it is sent as a new task or a follow-up. **Speak status** reads a summary with
+  ElevenLabs TTS. Without an ElevenLabs key the phone's built-in speech recognition and voice are used.
+
+## ElevenLabs and phone calls
+
+Put keys in `~/.argo/.env` (see `orchestrator/.env.example`) and restart the app.
+
+Outbound calls use ElevenLabs Agents with a Twilio number
+(`POST /v1/convai/twilio/outbound-call`). Create the agent in the ElevenLabs dashboard:
+
+1. Import your Twilio number under Phone Numbers; put its id in `ELEVENLABS_PHONE_NUMBER_ID`.
+2. Create an agent; put its id in `ELEVENLABS_AGENT_ID`. First message: `{{event_message}}`.
+   System prompt: it is the developer's coding-team dispatcher; `{{status_summary}}` is the current
+   state; it should relay the developer's decision with the `instruct` tool and confirm what it sent.
+3. Add two webhook tools, each sending header `x-argo-secret: <ARGO_HOOK_SECRET from web/.env.server>`:
+   - `get_status` → `POST <phone address>/_server/hooks/voice/status`, body `{ "run_id": "{{run_id}}" }`
+   - `instruct` → `POST <phone address>/_server/hooks/voice/instruct`, body `{ "run_id": "{{run_id}}", "instruction": "<what the developer said>" }`
+4. In the Mac app's Settings, enter your phone number and enable calls.
+
+## Tests
+
+```sh
+cd orchestrator && npm test     # scripted agent: planning, parallelism, isolation, override, follow-up, failure + retry
+cd web && wasp compile
+```

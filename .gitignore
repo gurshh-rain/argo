@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+mac/.build/
+mac/build/
+.argo/
+.env
+.env.*
+!.env.example
