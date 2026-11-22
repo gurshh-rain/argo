@@ -17,4 +17,4 @@ The deployable static files are in `web/site/dist/`.
 
 ## Product media
 
-Place video and image files in `web/public/media/`, then set their `/media/filename` URLs in `web/src/landingMedia.ts`. Each slot supports images or videos, an optional video poster, aspect ratio, and contain/cover fitting. Until assets are supplied, the page shows branded placeholders.
+The hero demo uses `web/public/media/argo.mp4`. To replace it, update its `/media/filename` URL in `web/src/landingMedia.ts`. The media component supports images or videos, an optional video poster, aspect ratio, and contain/cover fitting.

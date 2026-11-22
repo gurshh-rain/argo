@@ -8,21 +8,13 @@ export type ProductMedia = {
   fit?: 'contain' | 'cover'
 }
 
-// Swap either slot between video and image without changing the page layout.
-// ProductMedia can also be rendered elsewhere on the page with the same config.
-export const landingMedia: { hero: ProductMedia; workspace: ProductMedia } = {
+// ProductMedia can be moved elsewhere on the page with the same config.
+export const landingMedia: { hero: ProductMedia } = {
   hero: {
     kind: 'video',
-    src: '',
+    src: '/media/argo.mp4',
     alt: 'Argo product animation',
     aspectRatio: '16 / 9',
-    fit: 'contain',
-  },
-  workspace: {
-    kind: 'image',
-    src: '',
-    alt: 'The Argo Mac app workspace',
-    aspectRatio: '16 / 10',
     fit: 'contain',
   },
 }

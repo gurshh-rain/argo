@@ -43,11 +43,6 @@ export function LandingPage() {
           <div className="workflow-grid">{features.map((item) => <article key={item.title}><span className="feature-icon"><Icon name={item.icon} width="25" height="25" /></span><h3>{item.title}</h3><p>{item.description}</p></article>)}</div>
         </section>
 
-        <section className="workspace-showcase section-shell" aria-labelledby="workspace-title">
-          <div className="section-intro"><div><span className="eyebrow">A CLOSER LOOK</span><h2 id="workspace-title">Your whole workspace.<br />Right where you need it.</h2></div><p>A home for your agents,<br />from the first prompt to the final review.</p></div>
-          <ProductMedia media={landingMedia.workspace} caption="Argo for Mac" />
-        </section>
-
         <section className="download-section section-shell" id="download" aria-labelledby="download-title">
           <div className="download-card"><span className="download-app-icon"><span className="brand-symbol" aria-hidden="true"><img src="/argo.png" alt="" width="1728" height="2304" /></span></span><span className="eyebrow">YOUR NEXT WORKSPACE</span><h2 id="download-title">Make room for your crew.</h2><p>A native Mac app for the agents you already use.</p><a href={repository} className="button button-primary" target="_blank" rel="noreferrer"><MacIcon />Get Argo for Mac</a><span className="download-source-note">Build from source · macOS 14 or later</span><details className="build-instructions"><summary>Building from source?</summary><p>Clone the repository, install Node.js 24 or later, and have at least one coding agent CLI installed. From the repository root, run:</p><code>mac/build.sh</code><p>Then open <code>mac/build/Argo.app</code>.</p><a href={`${repository}#run-it`} target="_blank" rel="noreferrer">Read the setup instructions on GitHub</a></details></div>
         </section>
