@@ -36,6 +36,7 @@ test('plans, waits for approval, honours an override, runs in parallel, merges, 
   const run = await engine.startRun(project, 'make three files')
   await until(() => run.status === 'awaiting_approval')
   assert.deepEqual(run.tasks.map((t) => t.id), ['t1', 't2', 't3'])
+  assert.deepEqual(run.tasks.map((t) => [t.difficulty, t.auto.model, t.auto.reasoning]), [['easy', 'mock-1', 'low'], ['medium', 'mock-1', 'medium'], ['hard', 'mock-2', 'high']], 'difficulty picks the model tier and reasoning')
   engine.override(run, 't2', { reasoning: 'high' })
   engine.approve(run)
   await until(() => run.tasks.filter((t) => t.status === 'running' && t.worktree).length === 2)
@@ -75,6 +76,37 @@ test('a failing agent raises attention and a spoken instruction retries it', asy
   assert.ok(a && a.taskId === 't1')
   assert.equal(run.tasks[2].status, 'pending')
   assert.equal(engine.instruct(run, 'try again please', 'phone-call').action, 'retried')
+  assert.equal(run.tasks[0].difficulty, 'medium', 'a failed subtask is escalated one level for the retry')
   await until(() => run.status === 'done')
   assert.ok(runs.has(run.id) && loadConfig().projects.includes(project))
+})
+
+test('difficulty maps to each CLI\'s model tiers, and follow-ups are judged by wording', async () => {
+  const { pick, classify } = await import('../src/planner.ts')
+  assert.deepEqual(['easy', 'medium', 'hard'].map((d) => pick('claude', d as any).model), ['haiku', 'sonnet', 'opus'])
+  assert.deepEqual(['easy', 'medium', 'hard'].map((d) => pick('devin', d as any).model), ['swe-2-flash-medium', 'swe-2-high', 'swe-2-max'])
+  assert.deepEqual(pick('codex', 'hard'), { agent: 'codex', model: '', reasoning: 'high' })
+  assert.equal(classify('fix the typo in the README'), 'easy')
+  assert.equal(classify('add a --json flag to the export command'), 'medium')
+  assert.equal(classify('find the root cause of the race condition in the job queue'), 'hard')
+  loadConfig().settings.models.claude = 'sonnet'
+  assert.equal(pick('claude', 'hard').model, 'sonnet', 'a model pinned in Settings wins')
+  delete loadConfig().settings.models.claude
+})
+
+test('a run needs no repo: research runs share a scratch folder and report an answer', async () => {
+  const run = await engine.startRun('', 'compare three things', { autoApprove: true })
+  assert.equal(run.isolated, false)
+  await until(() => run.status === 'done')
+  assert.ok(run.tasks.every((t) => t.status === 'done' && !t.branch && t.worktree === run.project))
+  assert.match(run.report!.answer!, /done: wrote files/)
+  assert.deepEqual(run.report!.checks, [])
+  assert.ok(!loadConfig().projects.includes(run.project), 'scratch folders are not offered as projects')
+  await assert.rejects(engine.applyRun(run), /nothing to merge/)
+
+  const plain = mkdtempSync(join(tmpdir(), 'vo-plain-'))
+  const inPlace = await engine.startRun(plain, 'make three files', { autoApprove: true })
+  await until(() => inPlace.status === 'done')
+  assert.ok(existsSync(join(plain, 'c.txt')), 'a folder that is not a repo is worked in directly')
+  assert.deepEqual(inPlace.report!.changedFiles.sort(), ['a.txt', 'b.txt', 'c.txt'])
 })

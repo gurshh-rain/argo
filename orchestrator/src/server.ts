@@ -105,8 +105,9 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
   }
   if (m === 'POST' && at('runs')) {
     const b = await body(req)
-    const project = resolvePath(String(b.project || loadConfig().projects[0] || ''))
-    if (!b.project && !loadConfig().projects.length) throw new HttpError(400, 'No project selected. Open a project folder in the Mac app first.')
+    // no project means a research run in a scratch folder; the phone falls back to the most recent project
+    const chosen = b.project ?? (b.research ? '' : loadConfig().projects[0] || '')
+    const project = chosen ? resolvePath(String(chosen)) : ''
     return engine.startRun(project, String(b.goal || ''), { constraints: b.constraints, autoApprove: b.autoApprove })
   }
   if (p[0] === 'runs' && p[1]) {

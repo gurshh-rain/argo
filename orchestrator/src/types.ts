@@ -1,5 +1,6 @@
 export type AgentId = 'claude' | 'codex' | 'devin' | 'mock'
 export type Reasoning = 'low' | 'medium' | 'high'
+export type Difficulty = 'easy' | 'medium' | 'hard'
 export type TaskStatus = 'pending' | 'running' | 'merging' | 'done' | 'failed' | 'needs_attention' | 'cancelled'
 export type RunStatus = 'planning' | 'awaiting_approval' | 'running' | 'verifying' | 'done' | 'needs_attention' | 'failed' | 'cancelled'
 
@@ -15,6 +16,8 @@ export interface Task {
   description: string
   dependsOn: string[]
   kind: 'work' | 'followup' | 'review'
+  // how hard the orchestrator judged this subtask; it decides the model tier and reasoning level
+  difficulty: Difficulty
   status: TaskStatus
   // what the orchestrator chose, and why
   auto: Assignment & { why: string }
@@ -50,6 +53,8 @@ export interface Report {
   completed: string[]
   attention: string[]
   checks: CheckResult[]
+  // for runs without a repo: the full text produced by the final subtask(s)
+  answer?: string
   reviewedBy?: string
   branch: string
   changedFiles: string[]
@@ -73,6 +78,9 @@ export interface Run {
   constraints: string[]
   status: RunStatus
   createdAt: number
+  // true when the project is a git repo: each subtask gets its own worktree and is merged.
+  // false for research or a plain folder: agents share one working folder, nothing is branched or merged.
+  isolated: boolean
   baseBranch: string
   baseCommit: string
   branch: string

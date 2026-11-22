@@ -61,6 +61,7 @@ struct SidebarToolbar: View {
                 }
                 Divider()
                 Button("Open project…", action: store.chooseProject)
+                Button("No project (research)", action: store.clearProject).disabled(store.project.isEmpty)
             } label: { Image(systemName: "plus") }
             .menuStyle(.borderlessButton).fixedSize().help("New terminal or project")
             Button { store.step(-1) } label: { Image(systemName: "arrow.left") }.help("Previous")
@@ -82,7 +83,7 @@ struct WorkspaceTab: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     Image(systemName: "pin.fill").font(.system(size: 9)).rotationEffect(.degrees(45))
-                    Text(store.project.isEmpty ? "Choose a project" : (store.project as NSString).lastPathComponent).font(.system(size: 13, weight: .bold)).lineLimit(1)
+                    Text(store.project.isEmpty ? "No project" : (store.project as NSString).lastPathComponent).font(.system(size: 13, weight: .bold)).lineLimit(1)
                     Spacer(minLength: 0)
                     if !hub.ringing.isEmpty { Image(systemName: "bell.fill").font(.system(size: 9)) }
                 }
@@ -95,7 +96,6 @@ struct WorkspaceTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain).help(store.project)
-        .simultaneousGesture(TapGesture().onEnded { if store.project.isEmpty { store.chooseProject() } })
     }
 }
 
@@ -118,10 +118,12 @@ struct RunTab: View {
                             .frame(width: 15, height: 15).background(on ? Color.white : Theme.ring, in: Circle())
                     }
                 }
+                if run.hasRepo {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.triangle.branch").font(.system(size: 8))
                     Text(run.branch).lineLimit(1).truncationMode(.middle)
                 }.font(.system(size: 10, design: .monospaced)).foregroundStyle(on ? Color.white.opacity(0.85) : Theme.dim)
+                }
                 Text(needs.first?.message ?? "\(run.projectName) · \(run.status.pretty)\(run.tasks.isEmpty ? "" : " · \(done)/\(run.tasks.count)")")
                     .font(.system(size: 10)).foregroundStyle(on ? Color.white.opacity(0.85) : needs.isEmpty ? Theme.dim : Theme.ring).lineLimit(2)
                     .multilineTextAlignment(.leading)

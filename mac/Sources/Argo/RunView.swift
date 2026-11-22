@@ -22,13 +22,13 @@ struct RunView: View {
             Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(Theme.dim)
             Text(run.projectName).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.text)
             StatusDot(status: run.status)
-            Text("\(run.status.pretty) · \(run.branch)").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
+            Text(run.hasRepo ? "\(run.status.pretty) · \(run.branch)" : "\(run.status.pretty) · no repo").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
             Spacer()
             if run.status == "awaiting_approval" {
                 Text("Review the plan. Click any agent label to override it.").font(.system(size: 11)).foregroundStyle(Theme.amber)
                 Button("Approve & run") { store.runAction("approve") }.buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: .command)
             }
-            if ["done", "needs_attention"].contains(run.status), run.report != nil {
+            if run.hasRepo, ["done", "needs_attention"].contains(run.status), run.report != nil {
                 Button(run.applied == true ? "Applied" : "Merge into \(run.baseBranch)") { store.runAction("apply") }.disabled(run.applied == true)
             }
             if run.isActive || run.status == "awaiting_approval" { Button("Cancel") { store.runAction("cancel") } }
@@ -88,7 +88,7 @@ struct Inspector: View {
                         Text("\(t.id) \(t.title)").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.text).lineLimit(1)
                     }
                     let a = t.effective
-                    Text("\(store.agent(a.agent)?.label ?? "?") · \((a.model ?? "").isEmpty ? "cli default" : a.model!) · \(a.reasoning ?? "")\(t.override != nil ? " · override" : "")")
+                    Text("\(store.agent(a.agent)?.label ?? "?") · \((a.model ?? "").isEmpty ? "cli default" : a.model!) · \(a.reasoning ?? "")\(t.difficulty.map { " · \($0)" } ?? "")\(t.override != nil ? " · override" : "")")
                         .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.agent(a.agent))
                     if !t.changedFiles.isEmpty {
                         Text(t.changedFiles.joined(separator: "\n")).font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
@@ -100,6 +100,7 @@ struct Inspector: View {
 
     @ViewBuilder var report: some View {
         if let r = run.report {
+            if let a = r.answer, !a.isEmpty { section("Answer") { body(a) } }
             section("Completed") { bullets(r.completed, empty: "nothing", color: Theme.green) }
             section("Needs attention") { bullets(r.attention, empty: "nothing", color: Theme.amber) }
             section("Checks") {
@@ -150,18 +151,18 @@ struct Composer: View {
     @EnvironmentObject var store: Store
     @State private var text = ""
     @State private var forceNew = false
-    var followup: Bool { !forceNew && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
+    var followup: Bool { !forceNew && !store.showTeam && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
 
     var body: some View {
         HStack(spacing: 8) {
-            if store.run != nil {
+            if store.run != nil && !store.showTeam {
                 Picker("", selection: $forceNew) {
                     Text("Follow-up").tag(false)
                     Text("New task").tag(true)
                 }.pickerStyle(.segmented).fixedSize().labelsHidden()
             }
             Text("❯").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.ring)
-            TextField(followup ? "Tell the agents what to do next…" : "Describe one high-level task for \((store.project as NSString).lastPathComponent.isEmpty ? "your project" : (store.project as NSString).lastPathComponent)…", text: $text, axis: .vertical)
+            TextField(followup ? "Tell the agents what to do next…" : (store.project.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.project as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
                 .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1...4)
                 .onSubmit(send)
             Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.system(size: 20)) }

@@ -8,7 +8,9 @@ final class Store: ObservableObject {
     @Published var logs: [String: [String]] = [:]
     @Published var selectedRun: String?
     @Published var project: String = UserDefaults.standard.string(forKey: "project") ?? ""
-    @Published var showTeam = false
+    @Published var showTeam = true
+    @Published var filesHidden = false
+    private var userClearedProject = false
     @Published var sidebarHidden = false
 
     /// Back / forward in the sidebar: the workspace first, then each run.
@@ -56,7 +58,7 @@ final class Store: ObservableObject {
             if s.runs != state?.runs || s.attention != state?.attention || s.settings != state?.settings || state == nil { state = s }
             startupError = nil
             if selectedRun == nil || !s.runs.contains(where: { $0.id == selectedRun }) { selectedRun = s.runs.first?.id }
-            if project.isEmpty, let p = s.projects.first { project = p }
+            if project.isEmpty, !userClearedProject, let p = s.projects.first { project = p }
             for a in s.attention where !seenAttention.contains(a.id) {
                 seenAttention.insert(a.id)
                 if primed { notify(a) }
@@ -96,11 +98,18 @@ final class Store: ObservableObject {
         }
     }
 
+    func clearProject() {
+        project = ""
+        userClearedProject = true
+        UserDefaults.standard.removeObject(forKey: "project")
+    }
+
     func newRun(_ goal: String) {
-        guard !project.isEmpty else { return chooseProject() }
         act {
+            // no project chosen: a research run in a scratch folder, no repo needed
             let r: Run = try await self.daemon.request("POST", "runs", body: ["project": self.project, "goal": goal])
             self.selectedRun = r.id
+            self.showTeam = false
         }
     }
     func instruct(_ text: String) {

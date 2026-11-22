@@ -44,6 +44,9 @@ struct ArgoApp: App {
                     if ProcessInfo.processInfo.environment["ARGO_DEMO_TEAM"] != nil {
                         for k in ["claude", "devin", "shell"] { hub.add(kind: k, project: store.project, horizontal: k != "shell") }
                         store.showTeam = true
+                    } else if hub.members.isEmpty {
+                        // one terminal is always there to start from; split it to add agents
+                        hub.add(kind: "shell", project: store.project)
                     }
                 }
         }
@@ -80,9 +83,13 @@ struct RootView: View {
                 } else {
                     message("Give your agents one task", "Argo plans it, splits it across \(store.installedAgents.map(\.label).joined(separator: ", ")), runs independent parts in parallel in isolated worktrees, then merges, checks and reports.")
                 }
-                if !store.showTeam { Composer() }
+                Composer()
             }
             .background(Theme.bg)
+            if store.showTeam && !store.filesHidden && store.startupError == nil {
+                VLine()
+                FilesPanel().frame(width: 300)
+            }
         }
         .overlay(alignment: .topLeading) {
             if store.sidebarHidden { SidebarToolbar().frame(width: 30, alignment: .leading).clipped().padding(.leading, 78) }

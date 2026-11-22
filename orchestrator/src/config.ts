@@ -6,6 +6,8 @@ import type { Settings } from './types.ts'
 
 export const HOME = process.env.ARGO_HOME || join(homedir(), '.argo')
 export const WORKTREES = join(HOME, 'worktrees')
+// scratch folders for runs started without a project (research, questions)
+export const WORKSPACES = join(HOME, 'workspaces')
 const CONFIG_FILE = join(HOME, 'config.json')
 const ENV_FILE = join(HOME, '.env')
 
@@ -33,6 +35,7 @@ let cached: Config | undefined
 export function loadConfig(): Config {
   if (cached) return cached
   mkdirSync(WORKTREES, { recursive: true })
+  mkdirSync(WORKSPACES, { recursive: true })
   let raw: Partial<Config> = {}
   if (existsSync(CONFIG_FILE)) raw = JSON.parse(readFileSync(CONFIG_FILE, 'utf8'))
   cached = {

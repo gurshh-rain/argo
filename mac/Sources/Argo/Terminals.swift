@@ -192,13 +192,17 @@ struct TeamView: View {
                     .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
                 Spacer()
                 AddMemberMenu()
+                if store.filesHidden {
+                    Button { store.filesHidden = false } label: { Image(systemName: "sidebar.right") }
+                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Show files")
+                }
             }
             .padding(.leading, store.sidebarHidden ? 110 : 10).padding(.trailing, 10).frame(height: 30).background(Theme.bg)
             HLine()
             if hub.members.isEmpty {
                 VStack(spacing: 8) {
-                    Text("Add your first teammate").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.text)
-                    Text("Each terminal is a member of the team. Add several Claudes and Devins and they work side by side in your project, sharing the record in .argo/.")
+                    Text("No terminals open").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.text)
+                    Text("Open a terminal, then split it to run Claude, Devin or Codex side by side in your project. They share the record in .argo/.")
                         .font(.system(size: 12.5)).foregroundStyle(Theme.dim).multilineTextAlignment(.center).frame(maxWidth: 480)
                     AddMemberMenu().padding(.top, 6)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -7,9 +7,9 @@ if (prompt.includes('Return ONLY a JSON object') && prompt.includes('"tasks"')) 
   console.log(JSON.stringify({
     constraints: ['keep it small'],
     tasks: [
-      { id: 't1', title: 'Write a', description: 'MOCK_WRITE a.txt', dependsOn: [], agent: 'mock', model: 'mock-1', reasoning: 'low', why: 'independent' },
-      { id: 't2', title: 'Write b', description: 'MOCK_WRITE b.txt', dependsOn: [], agent: 'mock', model: 'mock-1', reasoning: 'low', why: 'independent' },
-      { id: 't3', title: 'Combine', description: 'MOCK_WRITE c.txt', dependsOn: ['t1', 't2'], agent: 'mock', model: 'mock-1', reasoning: 'low', why: 'needs both' },
+      { id: 't1', title: 'Write a', description: 'MOCK_WRITE a.txt', dependsOn: [], agent: 'mock', difficulty: 'easy', why: 'independent' },
+      { id: 't2', title: 'Write b', description: 'MOCK_WRITE b.txt', dependsOn: [], agent: 'mock', difficulty: 'medium', why: 'independent' },
+      { id: 't3', title: 'Combine', description: 'MOCK_WRITE c.txt', dependsOn: ['t1', 't2'], agent: 'mock', difficulty: 'hard', why: 'needs both' },
     ],
   }))
 } else if (prompt.includes('"complete"')) {

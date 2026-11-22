@@ -27,6 +27,7 @@ struct TaskItem: Codable, Identifiable, Hashable {
     let description: String
     let dependsOn: [String]
     let kind: String
+    let difficulty: String?
     let status: String
     let auto: Assignment
     let override: Assignment?
@@ -53,6 +54,7 @@ struct Report: Codable, Hashable {
     let completed: [String]
     let attention: [String]
     let checks: [CheckResult]
+    let answer: String?
     let reviewedBy: String?
     let branch: String
     let changedFiles: [String]
@@ -65,6 +67,7 @@ struct Run: Codable, Identifiable, Hashable {
     let constraints: [String]
     let status: String
     let createdAt: Double
+    let isolated: Bool?
     let baseBranch: String
     let branch: String
     let planner: Assignment?
@@ -75,7 +78,9 @@ struct Run: Codable, Identifiable, Hashable {
     let applied: Bool?
     let error: String?
 
-    var projectName: String { (project as NSString).lastPathComponent }
+    var hasRepo: Bool { isolated != false }
+    var isResearch: Bool { project.contains("/.argo/workspaces/") }
+    var projectName: String { isResearch ? "research" : (project as NSString).lastPathComponent }
     var isActive: Bool { ["planning", "running", "verifying"].contains(status) }
 }
 

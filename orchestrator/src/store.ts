@@ -21,8 +21,8 @@ export const emit = (type: string, runId?: string, taskId?: string, data?: unkno
 
 export const dir = (project: string, ...p: string[]) => join(project, '.argo', ...p)
 
-export function ensureProject(project: string) {
-  for (const d of ['', 'notes', 'logs']) mkdirSync(dir(project, d), { recursive: true })
+export function ensureProject(project: string, register = true) {
+  for (const d of ['', 'notes', 'logs', 'results']) mkdirSync(dir(project, d), { recursive: true })
   // keep the record out of the user's commits without touching their .gitignore
   const exclude = join(project, '.git', 'info', 'exclude')
   if (existsSync(join(project, '.git', 'info'))) {
@@ -30,7 +30,7 @@ export function ensureProject(project: string) {
     if (!cur.includes('.argo/')) appendFileSync(exclude, '\n.argo/\n')
   }
   const cfg = loadConfig()
-  if (!cfg.projects.includes(project)) {
+  if (register && !cfg.projects.includes(project)) {
     cfg.projects.unshift(project)
     saveConfig()
   }
@@ -41,6 +41,7 @@ export function loadProject(project: string) {
   if (!existsSync(f)) return
   const data = JSON.parse(readFileSync(f, 'utf8')) as { runs: Run[]; attention?: Attention[] }
   for (const r of data.runs) {
+    r.isolated ??= true // runs saved before repo-less runs existed
     // anything in flight when the daemon stopped cannot still be running
     if (['planning', 'running', 'verifying'].includes(r.status)) {
       r.status = 'needs_attention'
@@ -100,10 +101,12 @@ export function renderMemory(run: Run): string {
     const a = assignment(t)
     lines.push(
       `### ${t.id} — ${t.title} [${t.status}]`,
+      `- difficulty: ${t.difficulty}`,
       `- agent: ${a.agent} · model: ${a.model || 'cli default'} · reasoning: ${a.reasoning}${t.override ? ' (manual override)' : ''}`,
       `- depends on: ${t.dependsOn.join(', ') || 'nothing'}`,
-      `- branch: ${t.branch || '-'}`,
     )
+    if (t.branch) lines.push(`- branch: ${t.branch}`)
+    if (existsSync(dir(run.project, 'results', `${run.id}-${t.id}.md`))) lines.push(`- full output: ${dir(run.project, 'results', `${run.id}-${t.id}.md`)}`)
     if (t.changedFiles.length) lines.push(`- changed files: ${t.changedFiles.join(', ')}`)
     if (t.summary) lines.push(`- result: ${t.summary.replace(/\s+/g, ' ').slice(0, 600)}`)
     if (t.error) lines.push(`- problem: ${t.error.slice(0, 300)}`)

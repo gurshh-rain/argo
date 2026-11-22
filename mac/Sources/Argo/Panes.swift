@@ -95,9 +95,11 @@ struct AssignmentMenu: View {
             } label: { label }
             .menuStyle(.borderlessButton).fixedSize()
             .help("Click to override. Orchestrator's reason: \(task.auto.why ?? "")")
+            if let d = task.difficulty { Chip(text: d, color: d == "hard" ? Theme.text : Theme.dim).help("Difficulty, which decides the model") }
             chip
         } else {
             label.help(task.auto.why ?? "")
+            if let d = task.difficulty { Chip(text: d, color: d == "hard" ? Theme.text : Theme.dim).help("Difficulty, which decides the model") }
             chip
         }
     }

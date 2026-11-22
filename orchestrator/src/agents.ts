@@ -2,7 +2,7 @@ import { spawn, execFileSync } from 'node:child_process'
 import { writeFileSync, mkdtempSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentId, Assignment } from './types.ts'
+import type { AgentId, Assignment, Difficulty } from './types.ts'
 
 export interface AgentSpec {
   id: AgentId
@@ -12,6 +12,8 @@ export interface AgentSpec {
   speed: 'fast' | 'medium' | 'slow'
   cost: 'low' | 'medium' | 'high'
   models: { id: string; note: string }[]
+  // which model each difficulty level gets
+  tiers: Record<Difficulty, string>
   reasoning: boolean
   installed?: boolean
   version?: string
@@ -30,6 +32,7 @@ export const CATALOG: AgentSpec[] = [
       { id: 'sonnet', note: 'balanced default' },
       { id: 'haiku', note: 'fast and cheap, good for mechanical edits' },
     ],
+    tiers: { easy: 'haiku', medium: 'sonnet', hard: 'opus' },
     reasoning: true,
   },
   {
@@ -40,6 +43,8 @@ export const CATALOG: AgentSpec[] = [
     speed: 'fast',
     cost: 'medium',
     models: [{ id: '', note: 'the model configured in the Codex CLI' }],
+    // Codex keeps its configured model; difficulty changes its reasoning effort instead
+    tiers: { easy: '', medium: '', hard: '' },
     reasoning: true,
   },
   {
@@ -52,13 +57,17 @@ export const CATALOG: AgentSpec[] = [
     models: [
       { id: 'swe-2-flash-medium', note: 'fastest, free' },
       { id: 'swe-2-high', note: 'stronger, free' },
+      { id: 'swe-2-max', note: 'strongest, slowest, free' },
       { id: 'adaptive', note: 'picks a model per step' },
     ],
+    tiers: { easy: 'swe-2-flash-medium', medium: 'swe-2-high', hard: 'swe-2-max' },
     reasoning: false,
   },
 ]
 if (process.env.ARGO_MOCK)
-  CATALOG.push({ id: 'mock', label: 'Mock', bin: 'node', strengths: 'testing the orchestrator', speed: 'fast', cost: 'low', models: [{ id: 'mock-1', note: 'scripted' }], reasoning: false })
+  CATALOG.push({ id: 'mock', label: 'Mock', bin: 'node', strengths: 'testing the orchestrator', speed: 'fast', cost: 'low', models: [{ id: 'mock-1', note: 'scripted' }, { id: 'mock-2', note: 'scripted, stronger' }], tiers: { easy: 'mock-1', medium: 'mock-1', hard: 'mock-2' }, reasoning: false })
+
+export const TIERS: Record<string, Record<Difficulty, string>> = Object.fromEntries(CATALOG.map((a) => [a.id, a.tiers]))
 
 let detected: AgentSpec[] | undefined
 export function agents(refresh = false): AgentSpec[] {

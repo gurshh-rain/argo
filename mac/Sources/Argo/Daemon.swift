@@ -39,9 +39,11 @@ final class Daemon {
         if await healthy() { return nil }
         guard let dir = orchestratorDir else { return "Orchestrator files not found. Rebuild the app with mac/build.sh." }
         let p = Process()
-        // a login shell, so node and the coding CLIs resolve exactly as they do in the user's terminal
+        // A login + interactive shell, so node and the coding CLIs resolve exactly as they do in the user's
+        // terminal. Launched from Finder the app has a bare PATH, and ~/.local/bin is usually added in .zshrc.
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", "exec node src/main.ts"]
+        p.arguments = ["-l", "-i", "-c", "exec node src/main.ts"]
+        p.standardInput = FileHandle.nullDevice
         p.currentDirectoryURL = dir
         let log = Self.home.appendingPathComponent("orchestrator.log")
         try? FileManager.default.createDirectory(at: Self.home, withIntermediateDirectories: true)
