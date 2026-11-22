@@ -70,18 +70,18 @@ control your agents, so keep it on localhost or a private network (Tailscale).
 
 For the hackathon demo, coding agents use the [call-user skill](orchestrator/src/skills/call-user/SKILL.md): write one question, run the existing local phone script, read `TRANSCRIPT`, and continue the same task. Argo includes the skill path in agent work prompts when **Call me when an agent needs attention** is enabled.
 
-The existing phone backend is installed at `/Users/gz/Documents/codevisor-call-demo` on Ricardo's Mac. Set `ARGO_PHONE_DEMO_DIR` before launching Argo to use another installation. This demo needs that backend and its configured Twilio account; cloning Argo alone does not install them. See [usage](docs/phone-call-usage-plan.md).
+The existing phone backend is installed at `/Users/gz/Documents/codevisor-call-demo` on Ricardo's Mac. Set `ARGO_PHONE_DEMO_DIR` before launching Argo to use another installation. This demo needs that backend and its configured phone account; cloning Argo alone does not install them. See [usage](docs/phone-call-usage-plan.md).
 
 When phone questions are enabled, background coding workers receive access to that backend's runtime directory. Background Codex workers also receive outbound network access for the call while keeping the workspace sandbox. Interactive terminals keep their existing CLI permissions; use Run in background if those permissions block the phone helper. Turning the setting off omits these phone additions. Attention notifications no longer automatically initiate a second ElevenLabs call.
 
-## Optional ElevenLabs phone integration
+## Phone calls with ElevenLabs
 
 Put keys in `~/.argo/.env` (see `orchestrator/.env.example`) and restart the app.
 
-Outbound calls use ElevenLabs Agents with a Twilio number
-(`POST /v1/convai/twilio/outbound-call`). Create the agent in the ElevenLabs dashboard:
+Outbound calls are placed by ElevenLabs Agents (`POST /v1/convai/twilio/outbound-call`), which speak
+to you and relay your decision back to the team. Create the agent in the ElevenLabs dashboard:
 
-1. Import your Twilio number under Phone Numbers; put its id in `ELEVENLABS_PHONE_NUMBER_ID`.
+1. Import your phone number under Phone Numbers (ElevenLabs connects it through Twilio); put its id in `ELEVENLABS_PHONE_NUMBER_ID`.
 2. Create an agent; put its id in `ELEVENLABS_AGENT_ID`. First message: `{{event_message}}`.
    System prompt: it is the developer's coding-team dispatcher; `{{status_summary}}` is the current
    state; it should relay the developer's decision with the `instruct` tool and confirm what it sent.
@@ -90,9 +90,9 @@ Outbound calls use ElevenLabs Agents with a Twilio number
    - `instruct` → `POST <phone address>/_server/hooks/voice/instruct`, body `{ "run_id": "{{run_id}}", "instruction": "<what the developer said>" }`
 4. In the Mac app's Settings, enter your phone number and enable calls.
 
-## Direct Twilio phone plan
+## Direct phone plan
 
-See the [phone skill usage guide](docs/phone-call-usage-plan.md) for the simple direct Twilio demo. The skill runs the existing phone program and returns text to its calling agent; it does not require a new provider API or callback routing inside Argo.
+See the [phone skill usage guide](docs/phone-call-usage-plan.md) for the simple direct demo. The skill runs the existing phone program and returns text to its calling agent; it does not require a new provider API or callback routing inside Argo.
 
 ## Tests
 
@@ -100,3 +100,13 @@ See the [phone skill usage guide](docs/phone-call-usage-plan.md) for the simple 
 cd orchestrator && npm test     # scripted agent: planning, parallelism, isolation, override, follow-up, failure + retry
 cd web && wasp compile
 ```
+
+## Packaging a release
+
+```sh
+mac/package.sh 0.1.0      # builds, then writes mac/dist/Argo-0.1.0-arm64.zip, .dmg and SHA256SUMS.txt
+```
+
+The app is ad-hoc signed, not notarized, so on another Mac the first launch needs right-click → Open
+(or `xattr -dr com.apple.quarantine /Applications/Argo.app`). It is built for the architecture of the
+Mac that packages it, and needs Node 24+ and at least one coding CLI on the user's PATH.
