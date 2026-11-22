@@ -14,11 +14,12 @@ import { voiceStatusHook, voiceInstructHook } from "./src/hooks" with { type: "r
 export default app({
   name: "argo",
   wasp: { version: "^0.26.1" },
-  title: "Argo",
+  title: "Argo — Your coding crew on Mac",
   head: [
-    "<link rel='icon' href='/favicon.ico' />",
+    "<link rel='icon' type='image/png' href='/argo.png' />",
     "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover' />",
-    "<meta name='theme-color' content='#000000' />",
+    "<meta name='theme-color' content='#111214' />",
+    "<meta name='description' content='Bring Claude Code, Codex, and Devin together. Plan, build, and review in one native Mac workspace.' />",
   ],
   spec: [
     route("LandingRoute", "/", page(LandingPage)),
