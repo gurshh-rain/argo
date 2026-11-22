@@ -9,7 +9,7 @@ export function ProductMedia({ media, caption }: { media: ProductMediaConfig; ca
   return <figure className={`product-media media-${media.kind}`}>
     <div className="product-media-frame" style={{ aspectRatio: media.aspectRatio ?? '16 / 9' }}>
       {available ? media.kind === 'video' ? (
-        <video key={media.src} controls playsInline preload="metadata" poster={media.poster} aria-label={media.alt} style={{ objectFit: media.fit ?? 'contain' }} onError={() => setFailedSource(media.src)}>
+        <video key={media.src} autoPlay muted loop playsInline disablePictureInPicture disableRemotePlayback preload="auto" poster={media.poster} aria-label={media.alt} style={{ objectFit: media.fit ?? 'contain', pointerEvents: 'none' }} onError={() => setFailedSource(media.src)}>
           <source src={media.src} />
           Your browser does not support video playback. <a href={media.src}>Download the video</a>.
         </video>

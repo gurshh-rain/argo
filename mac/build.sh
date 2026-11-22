@@ -13,6 +13,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/orchestrator"
 cp .build/release/Argo "$APP/Contents/MacOS/Argo"
 cp -R ../orchestrator/src ../orchestrator/package.json "$APP/Contents/Resources/orchestrator/"
+# the icon is generated from the logo with: swift make-icon.swift ../web/public/argo.png
+cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -21,6 +23,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Argo</string>
   <key>CFBundleIdentifier</key><string>dev.argo.mac</string>
   <key>CFBundleExecutable</key><string>Argo</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION:-0.1.0}</string>
   <key>CFBundleVersion</key><string>1</string>
