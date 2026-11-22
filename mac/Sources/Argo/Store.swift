@@ -262,12 +262,12 @@ final class Store: ObservableObject {
     func saveSettings(_ patch: [String: Any]) {
         act { let _: Ignored = try await self.daemon.request("PUT", "settings", body: patch) }
     }
-    private func worktreeBody(_ extra: [String: Any] = [:]) -> [String: Any] { extra.merging(["project": project]) { a, _ in a } }
+    private func worktreeBody(_ extra: [String: Any] = [:]) -> [String: Any] { extra.merging(["project": folder]) { a, _ in a } }
 
     /// `fetch`: ask the remote first, so "behind" shows what teammates have pushed since.
     func loadWorktrees(fetch: Bool = false) async {
-        guard !project.isEmpty else { worktrees = []; return }
-        let q = project.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "/-._~").union(.alphanumerics)) ?? ""
+        guard !folder.isEmpty else { worktrees = []; return }
+        let q = folder.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "/-._~").union(.alphanumerics)) ?? ""
         let list: [WorktreeInfo]? = try? await daemon.request("GET", "worktrees?project=\(q)\(fetch ? "&fetch=1" : "")")
         if let list, list != worktrees { worktrees = list }
     }

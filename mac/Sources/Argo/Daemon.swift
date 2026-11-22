@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// Finds or starts the local orchestrator and talks to it over loopback HTTP.
 final class Daemon {
@@ -26,17 +27,62 @@ final class Daemon {
         return candidates.compactMap { $0 }.first { FileManager.default.fileExists(atPath: $0.appendingPathComponent("src/main.ts").path) }
     }
 
-    func healthy() async -> Bool {
-        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else { return false }
+    func healthy() async -> Bool { await health() != nil }
+
+    /// The running orchestrator's build id ("" from builds that predate it), or nil when none is reachable.
+    func health() async -> String? {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 1
-        return ((try? await URLSession.shared.data(for: req))?.1 as? HTTPURLResponse)?.statusCode == 200
+        guard let (data, res) = try? await URLSession.shared.data(for: req), (res as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        let text = String(decoding: data, as: UTF8.self)
+        return text.hasPrefix("ok ") ? String(text.dropFirst(3)) : ""
+    }
+
+    /// Hash of the bundled orchestrator code, computed exactly as the orchestrator computes its own.
+    var bundledBuild: String? {
+        guard let src = orchestratorDir?.appendingPathComponent("src"),
+              let files = try? FileManager.default.contentsOfDirectory(atPath: src.path) else { return nil }
+        var h = SHA256()
+        for f in files.filter({ $0.hasSuffix(".ts") }).sorted() {
+            guard let d = FileManager.default.contents(atPath: src.appendingPathComponent(f).path) else { return nil }
+            h.update(data: d)
+        }
+        return String(h.finalize().map { String(format: "%02x", $0) }.joined().prefix(12))
+    }
+
+    /// Stops an orchestrator left running from an older build, so this app starts its own code.
+    private func replaceStale() async {
+        if let _: Ignored = try? await request("POST", "quit") {} else {
+            // builds before /api/quit: stop whatever Argo orchestrator holds the port
+            let lsof = Process()
+            lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+            lsof.arguments = ["-ti", "tcp:\(port)", "-sTCP:LISTEN"]
+            let pipe = Pipe()
+            lsof.standardOutput = pipe
+            try? lsof.run()
+            lsof.waitUntilExit()
+            for pid in String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).split(separator: "\n").compactMap({ Int32($0) }) {
+                let ps = Process()
+                ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+                ps.arguments = ["-o", "command=", "-p", "\(pid)"]
+                let out = Pipe()
+                ps.standardOutput = out
+                try? ps.run()
+                ps.waitUntilExit()
+                if String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("src/main.ts") { kill(pid, SIGTERM) }
+            }
+        }
+        for _ in 0..<20 where await healthy() { try? await Task.sleep(nanoseconds: 250_000_000) }
     }
 
     /// Returns nil when the orchestrator is reachable, otherwise a message for the user.
     func ensureRunning() async -> String? {
         _ = readConfig()
-        if await healthy() { return nil }
+        if let running = await health() {
+            guard let mine = bundledBuild, running != mine else { return nil }
+            await replaceStale()
+        }
         guard let dir = orchestratorDir else { return "Orchestrator files not found. Rebuild the app with mac/build.sh." }
         let p = Process()
         // A login + interactive shell, so node and the coding CLIs resolve exactly as they do in the user's

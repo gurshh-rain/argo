@@ -199,7 +199,7 @@ struct WorktreeMenu: View {
             Label("Worktree", systemImage: "arrow.triangle.branch").foregroundStyle(behind ? Theme.ring : Theme.dim)
         }
         .menuStyle(.borderlessButton).fixedSize().tint(Theme.dim)
-        .disabled(store.project.isEmpty)
-        .help(store.project.isEmpty ? "Choose a git project to use worktrees" : "Give an agent its own worktree, started from the latest code on the remote")
+        .disabled(store.folder.isEmpty)
+        .help(store.folder.isEmpty ? "Choose a git project to use worktrees" : "Give an agent its own worktree, started from the latest code on the remote")
     }
 }

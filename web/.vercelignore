@@ -1,0 +1,6 @@
+.env*
+.wasp/
+node_modules/
+site/node_modules/
+site/dist/
+migrations/

@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomInt, timingSafeEqual } from 'node:crypto'
-import { resolve as resolvePath } from 'node:path'
+import { resolve as resolvePath, join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { readdirSync, readFileSync } from 'node:fs'
 import { loadConfig, saveConfig, integrations } from './config.ts'
 import { runs, attention, subscribe, readLog, save } from './store.ts'
 import { agents } from './agents.ts'
@@ -8,6 +10,15 @@ import * as engine from './engine.ts'
 import * as g from './git.ts'
 import { summary, transcribe, speak, call, describe } from './voice.ts'
 import type { Run, Settings } from './types.ts'
+
+// Identifies this exact orchestrator code. The Mac app hashes its bundled copy the same way and replaces
+// an orchestrator left running from an older build (which would answer "Not found" to newer features).
+const srcDir = import.meta.dirname
+export const BUILD = (() => {
+  const h = createHash('sha256')
+  for (const f of readdirSync(srcDir).filter((f) => f.endsWith('.ts')).sort()) h.update(readFileSync(join(srcDir, f)))
+  return h.digest('hex').slice(0, 12)
+})()
 
 class HttpError extends Error {
   status: number
@@ -83,6 +94,10 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
   const at = (...shape: (string | null)[]) => p.length === shape.length && shape.every((s, i) => s === null || s === p[i])
 
   if (m === 'GET' && at('state')) return state()
+  if (m === 'POST' && at('quit')) {
+    setTimeout(() => process.exit(0), 100)
+    return { ok: true }
+  }
   if (m === 'GET' && at('summary')) return { text: summary(url.searchParams.get('run') || undefined) }
   if (m === 'PUT' && at('settings')) return updateSettings(await body(req))
   if (m === 'GET' && at('pair')) return { code: pairCode().code, expires: pair.expires }
@@ -180,7 +195,7 @@ export function serve() {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost')
     try {
-      if (url.pathname === '/health') return res.end('ok')
+      if (url.pathname === '/health') return res.end(`ok ${BUILD}`)
       const given = Buffer.from((req.headers.authorization || '').replace(/^Bearer /, ''))
       if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw new HttpError(401, 'Unauthorized')
       const out = await route(req, res, url)
