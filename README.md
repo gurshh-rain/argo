@@ -50,14 +50,22 @@ control your agents, so keep it on localhost or a private network (Tailscale).
   whether plans need approval. Per-subtask override from the pane header. Every pane, the record and
   the phone show which agent and model did the work and whether it was an override.
 - **Attention.** A failed agent, a blocked command, four minutes of silence, a merge conflict or a
-  finished run raises a notification (blue ring, macOS notification, and a phone call when configured).
+  finished run raises a notification (blue ring and macOS notification). Agents ask phone questions through the call-user skill.
   A follow-up while a subtask is blocked goes to that subtask ("approve" lets a blocked command run);
   otherwise it becomes a new subtask on the run.
 - **Voice.** The phone records audio, ElevenLabs Scribe transcribes it, and the transcript is shown
   and editable before it is sent as a new task or a follow-up. **Speak status** reads a summary with
   ElevenLabs TTS. Without an ElevenLabs key the phone's built-in speech recognition and voice are used.
 
-## ElevenLabs and phone calls
+## Ask the developer by phone
+
+For the hackathon demo, coding agents use the [call-user skill](orchestrator/src/skills/call-user/SKILL.md): write one question, run the existing local phone script, read `TRANSCRIPT`, and continue the same task. Argo includes the skill path in agent work prompts when **Call me when an agent needs attention** is enabled.
+
+The existing phone backend is installed at `/Users/gz/Documents/codevisor-call-demo` on Ricardo's Mac. Set `ARGO_PHONE_DEMO_DIR` before launching Argo to use another installation. This demo needs that backend and its configured Twilio account; cloning Argo alone does not install them. See [usage](docs/phone-call-usage-plan.md).
+
+When phone questions are enabled, background coding workers receive access to that backend's runtime directory. Background Codex workers also receive outbound network access for the call while keeping the workspace sandbox. Interactive terminals keep their existing CLI permissions; use Run in background if those permissions block the phone helper. Turning the setting off omits these phone additions. Attention notifications no longer automatically initiate a second ElevenLabs call.
+
+## Optional ElevenLabs phone integration
 
 Put keys in `~/.argo/.env` (see `orchestrator/.env.example`) and restart the app.
 
@@ -75,7 +83,7 @@ Outbound calls use ElevenLabs Agents with a Twilio number
 
 ## Direct Twilio phone plan
 
-See the [Phone Call Usage and Agent Integration Plan](docs/phone-call-usage-plan.md) for the existing local phone demo, editable questions, transcript retrieval, tunnel reuse, and the proposed connection to Argo tasks. The direct Twilio adapter is planned and is not implemented in this branch.
+See the [phone skill usage guide](docs/phone-call-usage-plan.md) for the simple direct Twilio demo. The skill runs the existing phone program and returns text to its calling agent; it does not require a new provider API or callback routing inside Argo.
 
 ## Tests
 

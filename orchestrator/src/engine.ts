@@ -1,12 +1,11 @@
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import type { Assignment, Attention, CheckResult, Run, Task } from './types.ts'
-import { loadConfig, integrations, WORKSPACES } from './config.ts'
+import { loadConfig, WORKSPACES } from './config.ts'
 import { runs, attention, save, emit, ensureProject, loadProject, renderMemory, ingestNotes, appendLog, assignment, dir, flush } from './store.ts'
 import { runAgent, spec, installed } from './agents.ts'
 import * as g from './git.ts'
 import { lead, planPrompt, extractJson, tasksFromPlan, route, routeFollowup, reviewPrompt, defaultModel, harder, classify } from './planner.ts'
-import { call } from './voice.ts'
 
 const aborts = new Map<string, AbortController>()
 const key = (run: Run, taskId: string) => `${run.id}/${taskId}`
@@ -16,8 +15,6 @@ function raise(run: Run, kind: Attention['kind'], message: string, taskId?: stri
   const a: Attention = { id: Math.random().toString(36).slice(2, 10), at: Date.now(), runId: run.id, taskId, kind, message, resolved: false }
   attention.push(a)
   emit('attention', run.id, taskId, a)
-  if (loadConfig().settings.callOnAttention && integrations().phoneCalls)
-    call(a).then(() => (a.called = true), (err) => appendLog(run, 'orchestrator', `phone call failed: ${err.message}`))
   save(run)
 }
 const resolve = (run: Run, taskId?: string) => {
@@ -155,9 +152,13 @@ ${renderMemory(run)}
 ## Your subtask: ${t.id} — ${t.title}
 ${t.description}
 ${extra ? `\n## New instruction from the user\n${extra}\n` : ''}
+${loadConfig().settings.callOnAttention ? `## Ask the developer by phone
+When you need the developer's answer to continue, read the call-user skill at ${JSON.stringify(join(import.meta.dirname, 'skills', 'call-user', 'SKILL.md'))}.
+Run the existing phone script described there and use its transcript as the answer in this task. The skill's temporary files and configured phone backend may live outside this worktree; keep project edits inside your assigned scope.
+` : ''}
 ## Rules
 ${run.isolated
-    ? `- Work only inside the current directory. It is your own git worktree (branch ${t.branch}), already containing the merged work of the subtasks you depend on.
+    ? `- Keep project source edits inside the current directory. It is your own git worktree (branch ${t.branch}), already containing the merged work of the subtasks you depend on. The phone skill may use its existing backend and private temporary files without changing backend code or credentials.
 - Stay within your subtask's files so your changes merge cleanly with the others.
 - Do not commit, push, or switch branches. The orchestrator commits and merges your work when you finish.
 - If you make a decision another agent must know about (an interface, a file name, a convention), append one bullet per decision to ${notes}
@@ -186,10 +187,13 @@ async function execTask(run: Run, t: Task, extra?: { instruction?: string; escal
   out(`── ${label(a)} · reasoning ${a.reasoning}${t.override ? ' · manual override' : ''} ${t.branch ? ' · ' + t.branch : ''}`)
   const ac = new AbortController()
   aborts.set(key(run, t.id), ac)
+  const phoneQuestions = loadConfig().settings.callOnAttention
+  const phoneBackend = process.env.ARGO_PHONE_DEMO_DIR || '/Users/gz/Documents/codevisor-call-demo'
   const res = await runAgent({
     ...a, cwd: t.worktree, prompt: workPrompt(run, t, a, extra?.instruction), escalate: extra?.escalate,
     resume: extra?.instruction && a.agent === 'claude' ? t.sessionId : undefined,
-    addDirs: [dir(run.project, 'notes')], signal: ac.signal, onLine: out,
+    addDirs: [dir(run.project, 'notes'), ...(phoneQuestions && existsSync(phoneBackend) ? [phoneBackend] : [])],
+    phoneQuestions, signal: ac.signal, onLine: out,
     stuckMs: 240_000, onStuck: () => raise(run, 'stuck', 'No output for four minutes.', t.id),
   })
   aborts.delete(key(run, t.id))

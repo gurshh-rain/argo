@@ -92,6 +92,7 @@ export interface RunOpts extends Assignment {
   escalate?: boolean
   resume?: string
   addDirs?: string[]
+  phoneQuestions?: boolean
   onLine: (line: string) => void
   signal?: AbortSignal
   stuckMs?: number
@@ -122,6 +123,7 @@ function command(o: RunOpts, tmp: string): { bin: string; args: string[]; stdin?
     case 'codex': {
       const args = ['exec', '--json', '--skip-git-repo-check', '-C', o.cwd, '-o', join(tmp, 'last.txt')]
       args.push('-s', o.readOnly ? 'read-only' : 'workspace-write')
+      if (o.phoneQuestions && !o.readOnly) args.push('-c', 'sandbox_workspace_write.network_access=true')
       if (o.model) args.push('-m', o.model)
       args.push('-c', `model_reasoning_effort="${o.reasoning}"`)
       for (const d of o.addDirs || []) args.push('--add-dir', d)
