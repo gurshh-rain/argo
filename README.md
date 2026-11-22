@@ -21,6 +21,8 @@ mac/build.sh && open mac/build/Argo.app      # starts the orchestrator itself
 Choose a project folder (a git repository), type a task, review the plan, click any agent label to
 override the agent, model or reasoning level for that subtask, then **Approve & run**.
 
+For voice input in the native Mac app, put `ELEVENLABS_API_KEY` in `~/.argo/.env` and restart the background service. Click the microphone beside the task input, allow microphone access, speak, then click stop. ElevenLabs fills the recognized text into your existing draft for review; use the normal send button when ready. Cancel discards the recording. Recordings are limited to two minutes and temporary audio is removed after capture. No separate dictation app is needed.
+
 Phone:
 
 ```sh

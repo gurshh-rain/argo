@@ -164,7 +164,7 @@ final class Store: ObservableObject {
     func refresh() async {
         do {
             let s: AppState = try await daemon.request("GET", "state")
-            if s.runs != state?.runs || s.attention != state?.attention || s.settings != state?.settings || state == nil { state = s }
+            if s.runs != state?.runs || s.attention != state?.attention || s.settings != state?.settings || s.integrations != state?.integrations || state == nil { state = s }
             startupError = nil
             if project.isEmpty, !userClearedProject, workspaces.isEmpty, let p = s.projects.first { project = p }
             remember(project)

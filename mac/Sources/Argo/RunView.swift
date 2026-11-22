@@ -125,31 +125,60 @@ struct Composer: View {
     @EnvironmentObject var hub: TeamHub
     @State private var text = ""
     @State private var forceNew = false
+    @StateObject private var voice = VoiceInput()
     var followup: Bool { !forceNew && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
 
     var body: some View {
-        HStack(spacing: 8) {
-            if store.run != nil {
-                Picker("", selection: $forceNew) {
-                    Text("Follow-up").tag(false)
-                    Text("New task").tag(true)
-                }.pickerStyle(.segmented).fixedSize().labelsHidden()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                if store.run != nil {
+                    Picker("", selection: $forceNew) {
+                        Text("Follow-up").tag(false)
+                        Text("New task").tag(true)
+                    }.pickerStyle(.segmented).fixedSize().labelsHidden().disabled(voice.busy)
+                }
+                Text("❯").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.ring)
+                TextField(followup ? "Tell the agents what to do next…" : (store.folder.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.folder as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
+                    .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1...4)
+                    .onSubmit(send)
+                Button {
+                    voice.toggle(daemon: store.daemon, configured: store.state?.integrations.elevenlabs == true) { transcript in
+                        text += (text.isEmpty || text.last?.isWhitespace == true ? "" : " ") + transcript
+                    }
+                } label: {
+                    if voice.phase == .permission || voice.phase == .transcribing {
+                        ProgressView().controlSize(.small).frame(width: 20, height: 20)
+                    } else {
+                        Image(systemName: voice.phase == .recording ? "stop.circle.fill" : "mic.fill").font(.system(size: 18))
+                    }
+                }
+                .buttonStyle(.plain).foregroundStyle(voice.phase == .recording ? Color.red : Theme.ring)
+                .disabled(voice.phase == .permission || voice.phase == .transcribing)
+                .help(voice.phase == .recording ? "Stop recording and transcribe" : "Dictate with ElevenLabs")
+                .accessibilityLabel(voice.phase == .recording ? "Stop voice recording" : "Start voice input")
+                Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.system(size: 20)) }
+                    .buttonStyle(.plain).foregroundStyle(text.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.dim : Theme.ring)
+                    .disabled(voice.busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            Text("❯").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.ring)
-            TextField(followup ? "Tell the agents what to do next…" : (store.folder.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.folder as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
-                .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1...4)
-                .onSubmit(send)
-            Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.system(size: 20)) }
-                .buttonStyle(.plain).foregroundStyle(text.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.dim : Theme.ring)
+            if voice.busy {
+                HStack {
+                    Text(voice.phase == .recording ? "Recording, up to two minutes. Click stop to transcribe." : voice.phase == .permission ? "Waiting for microphone permission…" : "Transcribing with ElevenLabs…")
+                    Button("Cancel") { voice.cancel() }.buttonStyle(.plain)
+                }.font(.caption).foregroundStyle(Theme.dim)
+            }
+            if let error = voice.error { Text(error).font(.caption).foregroundStyle(Theme.amber).textSelection(.enabled) }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(Theme.bg)
         .overlay(alignment: .top) { HLine() }
+        .onDisappear { voice.cancel() }
+        .onChange(of: store.project) { _, _ in voice.cancel() }
+        .onChange(of: store.selectedRun) { _, _ in voice.cancel() }
     }
 
     func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
+        guard !voice.busy, !t.isEmpty else { return }
         if followup { store.instruct(t) } else { store.newRun(t, terminals: hub.hasCLI(in: store.project)); forceNew = false }
         text = ""
     }

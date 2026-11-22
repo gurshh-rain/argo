@@ -67,10 +67,10 @@ final class Daemon {
 
     func stop() { process?.terminate() }
 
-    func request<T: Decodable>(_ method: String, _ path: String, body: [String: Any]? = nil) async throws -> T {
+    func request<T: Decodable>(_ method: String, _ path: String, body: [String: Any]? = nil, timeout: TimeInterval = 30) async throws -> T {
         var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/api/\(path)")!)
         req.httpMethod = method
-        req.timeoutInterval = 30
+        req.timeoutInterval = timeout
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let (data, res) = try await URLSession.shared.data(for: req)
