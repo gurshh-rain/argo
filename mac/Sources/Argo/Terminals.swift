@@ -272,7 +272,7 @@ struct TerminalPane: View {
                 Chip(text: c)
             }
             Button { hub.close(member.id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
-                .buttonStyle(.plain).foregroundStyle(Theme.dim).help("Remove from the team")
+                .buttonStyle(IconButton()).foregroundStyle(Theme.dim).help("Close this terminal")
         } trailing: {
             Circle().fill(hub.exited.contains(member.id) ? Theme.dim : Theme.agent(member.kind)).frame(width: 7, height: 7)
             // cmux's pane buttons: new terminal (pick an agent), split right, split down
@@ -290,7 +290,7 @@ struct TerminalPane: View {
         } content: {
             if let v = hub.view(member.id) { TerminalHost(view: v).padding(4).background(Theme.pane) }
         }
-        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim).tint(Theme.dim)
+        .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim).tint(Theme.dim)
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded { hub.focus(member.id) })
     }

@@ -17,8 +17,8 @@ struct FilesPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                HStack(spacing: 4) { RightTabs() }
+            HStack(spacing: 4) {
+                HStack(spacing: 4) { RightTabs() }.buttonStyle(.plain)
                 Button { searching.toggle(); if !searching { filter = "" } } label: { Image(systemName: "magnifyingglass") }
                     .foregroundStyle(searching ? Theme.text : Theme.dim).help("Filter by name")
                 Button { cache = [:] } label: { Image(systemName: "arrow.clockwise") }.help("Reload")
@@ -26,7 +26,7 @@ struct FilesPanel: View {
                 Spacer()
                 Button { store.filesHidden = true } label: { Image(systemName: "sidebar.right") }.help("Hide files")
             }
-            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim)
+            .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim)
             .padding(.horizontal, 8).frame(height: 30)
             HLine()
             if searching {

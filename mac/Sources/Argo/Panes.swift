@@ -64,7 +64,7 @@ struct AssignmentMenu: View {
         let label = (Text(spec?.label ?? a.agent ?? "?").foregroundColor(Theme.agent(a.agent))
             + Text(" · \(model)").foregroundColor(Theme.text)
             + Text(spec?.reasoning == true ? " · \(a.reasoning ?? "")" : "").foregroundColor(Theme.dim))
-            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+            .font(.system(size: 10.5, weight: .medium))
         let chip = Chip(text: task.override == nil ? "auto" : "override", color: task.override == nil ? Theme.dim : Theme.amber)
 
         if task.canOverride {
@@ -126,9 +126,9 @@ struct TaskPane: View {
                 let lines = store.logs[task.id] ?? []
                 if lines.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(task.description).font(Theme.mono).foregroundStyle(Theme.dim)
-                        if !task.dependsOn.isEmpty { Text("waits for \(task.dependsOn.joined(separator: ", "))").font(Theme.mono).foregroundStyle(Theme.amber) }
-                        Text("why: \(task.auto.why ?? "")").font(Theme.mono).foregroundStyle(Theme.dim.opacity(0.7))
+                        Text(task.description).font(.system(size: 12)).foregroundStyle(Theme.dim)
+                        if !task.dependsOn.isEmpty { Text("waits for \(task.dependsOn.joined(separator: ", "))").font(.system(size: 12)).foregroundStyle(Theme.amber) }
+                        Text("why: \(task.auto.why ?? "")").font(.system(size: 12)).foregroundStyle(Theme.dim.opacity(0.7))
                     }.padding(8).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 } else {
                     LogView(lines: lines)
@@ -138,17 +138,17 @@ struct TaskPane: View {
                         Image(systemName: "bell.badge.fill").foregroundStyle(Theme.ring)
                         Text(a.message).font(.system(size: 11)).foregroundStyle(Theme.text).lineLimit(2)
                         Spacer()
-                        if a.kind == "permission" { Button("Approve") { store.instruct("approve") } }
+                        if a.kind == "permission" { Button("Approve") { store.instruct("approve") }.buttonStyle(ArgoButton(kind: .primary)) }
                         Button("Retry") { store.retry(task.id) }
                         if store.state?.integrations.phoneCalls == true { Button("Call me") { store.callMe(a) } }
                         Button("Dismiss") { store.dismiss(a) }
                     }
-                    .controlSize(.small).padding(6).background(Theme.rowSelected)
+                    .buttonStyle(ArgoButton()).padding(.horizontal, 8).padding(.vertical, 6).background(Theme.rowSelected)
                 } else if task.status == "failed" {
                     HStack {
                         Text(task.error ?? "failed").font(.system(size: 11)).foregroundStyle(Theme.red).lineLimit(2)
                         Spacer()
-                        Button("Retry") { store.retry(task.id) }.controlSize(.small)
+                        Button("Retry") { store.retry(task.id) }.buttonStyle(ArgoButton())
                     }.padding(6).background(Theme.red.opacity(0.1))
                 }
             }
@@ -161,7 +161,7 @@ struct ClosePane: View {
     let key: String
     var body: some View {
         Button { store.closedPanes.insert(key) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
-            .buttonStyle(.plain).foregroundStyle(Theme.dim).help("Remove this pane (bring it back from the run's right-click menu)")
+            .buttonStyle(IconButton()).foregroundStyle(Theme.dim).help("Remove this pane (bring it back from the run's right-click menu)")
     }
 }
 
@@ -174,7 +174,7 @@ struct OrchestratorPane: View {
             Text("orchestrator").font(.system(size: 12)).foregroundStyle(Theme.text)
         } trailing: {
             if let p = run.planner {
-                Text("planned by \(store.agent(p.agent)?.label ?? "?") · \(p.model ?? "")").font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
+                Text("planned by \(store.agent(p.agent)?.label ?? "?") · \(p.model ?? "")").font(.system(size: 10.5)).foregroundStyle(Theme.dim)
             }
             ClosePane(key: "\(run.id)/orchestrator")
         } content: {

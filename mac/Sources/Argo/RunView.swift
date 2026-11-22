@@ -11,7 +11,7 @@ struct Inspector: View {
                 RightTabs()
                 Spacer()
                 Button { store.filesHidden = true } label: { Image(systemName: "sidebar.right") }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Hide panel")
+                    .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Hide panel")
             }
             .padding(.horizontal, 8).frame(height: 30)
             HLine()
@@ -32,7 +32,7 @@ struct Inspector: View {
             if run.decisions.isEmpty { body("none yet").opacity(0.6) }
             ForEach(run.decisions, id: \.self) { d in
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(d.by).font(.system(size: 9.5, design: .monospaced)).foregroundStyle(Theme.agent(d.by.components(separatedBy: "/").first))
+                    Text(d.by).font(.system(size: 9.5)).foregroundStyle(Theme.agent(d.by.components(separatedBy: "/").first))
                     body(d.text)
                 }
             }
@@ -46,9 +46,9 @@ struct Inspector: View {
                     }
                     let a = t.effective
                     Text("\(store.agent(a.agent)?.label ?? "?") · \((a.model ?? "").isEmpty ? "cli default" : a.model!) · \(a.reasoning ?? "")\(t.difficulty.map { " · \($0)" } ?? "")\(t.override != nil ? " · override" : "")")
-                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.agent(a.agent))
+                        .font(.system(size: 10)).foregroundStyle(Theme.agent(a.agent))
                     if !t.changedFiles.isEmpty {
-                        Text(t.changedFiles.joined(separator: "\n")).font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
+                        Text(t.changedFiles.joined(separator: "\n")).font(.system(size: 10)).foregroundStyle(Theme.dim)
                     }
                 }
             }
@@ -66,7 +66,7 @@ struct Inspector: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 5) {
                             Image(systemName: c.ok ? "checkmark.circle.fill" : "xmark.circle.fill").foregroundStyle(c.ok ? Theme.green : Theme.red)
-                            Text(c.command).font(Theme.mono).foregroundStyle(Theme.text)
+                            Text(c.command).font(.system(size: 12)).foregroundStyle(Theme.text)
                             Chip(text: c.where)
                         }
                         if !c.ok { Text(String(c.output.suffix(600))).font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim).textSelection(.enabled) }
@@ -75,7 +75,7 @@ struct Inspector: View {
             }
             section("Reviewed by") { body(r.reviewedBy ?? "-") }
             section("Changed files (\(r.changedFiles.count))") {
-                Text(r.changedFiles.joined(separator: "\n")).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim).textSelection(.enabled)
+                Text(r.changedFiles.joined(separator: "\n")).font(.system(size: 10.5)).foregroundStyle(Theme.dim).textSelection(.enabled)
             }
         } else if let e = run.error {
             section("Problem") { body(e) }
@@ -129,7 +129,22 @@ struct Composer: View {
     var followup: Bool { !forceNew && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            // The plan is approved here, next to where it was asked for.
+            if let run = store.run, run.status == "awaiting_approval" {
+                HStack(spacing: 10) {
+                    Image(systemName: "checklist").foregroundStyle(Theme.ring)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Plan ready: \(run.tasks.count) subtask\(run.tasks.count == 1 ? "" : "s")").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.text)
+                        Text("Check who does what above. Click an agent label to change it.").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
+                    }
+                    Spacer()
+                    Button("Cancel") { store.runAction("cancel") }.buttonStyle(ArgoButton(large: true))
+                    Button { store.runAction("approve") } label: { Label("Approve & run", systemImage: "play.fill") }
+                        .buttonStyle(ArgoButton(kind: .primary, large: true)).keyboardShortcut(.return, modifiers: .command).help("⌘↩")
+                }
+                .padding(10).background(Theme.rowSelected, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
             HStack(spacing: 8) {
                 if store.run != nil {
                     Picker("", selection: $forceNew) {
@@ -137,9 +152,9 @@ struct Composer: View {
                         Text("New task").tag(true)
                     }.pickerStyle(.segmented).fixedSize().labelsHidden().disabled(voice.busy)
                 }
-                Text("❯").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.ring)
+                Text("❯").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.ring)
                 TextField(followup ? "Tell the agents what to do next…" : (store.folder.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.folder as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
-                    .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1...4)
+                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(Theme.text).lineLimit(1...4)
                     .onSubmit(send)
                 Button {
                     voice.toggle(daemon: store.daemon, configured: store.state?.integrations.elevenlabs == true) { transcript in
@@ -149,21 +164,25 @@ struct Composer: View {
                     if voice.phase == .permission || voice.phase == .transcribing {
                         ProgressView().controlSize(.small).frame(width: 20, height: 20)
                     } else {
-                        Image(systemName: voice.phase == .recording ? "stop.circle.fill" : "mic.fill").font(.system(size: 18))
+                        Image(systemName: voice.phase == .recording ? "stop.fill" : "mic.fill").font(.system(size: 14)).frame(width: 20, height: 20)
                     }
                 }
-                .buttonStyle(.plain).foregroundStyle(voice.phase == .recording ? Color.red : Theme.ring)
+                .buttonStyle(IconButton()).foregroundStyle(voice.phase == .recording ? Color.red : Theme.dim)
                 .disabled(voice.phase == .permission || voice.phase == .transcribing)
                 .help(voice.phase == .recording ? "Stop recording and transcribe" : "Dictate with ElevenLabs")
                 .accessibilityLabel(voice.phase == .recording ? "Stop voice recording" : "Start voice input")
-                Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.system(size: 20)) }
-                    .buttonStyle(.plain).foregroundStyle(text.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.dim : Theme.ring)
+                Button(action: send) {
+                    Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .background(text.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.chip : Theme.ring, in: Circle())
+                }
+                    .buttonStyle(.plain).help("Send (↩)")
                     .disabled(voice.busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             if voice.busy {
                 HStack {
                     Text(voice.phase == .recording ? "Recording, up to two minutes. Click stop to transcribe." : voice.phase == .permission ? "Waiting for microphone permission…" : "Transcribing with ElevenLabs…")
-                    Button("Cancel") { voice.cancel() }.buttonStyle(.plain)
+                    Button("Cancel") { voice.cancel() }.buttonStyle(ArgoButton())
                 }.font(.caption).foregroundStyle(Theme.dim)
             }
             if let error = voice.error { Text(error).font(.caption).foregroundStyle(Theme.amber).textSelection(.enabled) }

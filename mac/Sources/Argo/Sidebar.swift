@@ -31,14 +31,11 @@ struct Sidebar: View {
                     }.font(.system(size: 10.5))
                 }
                 HStack {
-                    Button { sheet = .settings } label: { Image(systemName: "gearshape") }.help("Settings")
-                    Button { sheet = .mobile } label: {
-                        Text("Phone").font(.system(size: 10.5, weight: .semibold)).padding(.horizontal, 8).padding(.vertical, 2)
-                            .overlay(Capsule().stroke(Theme.dim.opacity(0.6), lineWidth: 1))
-                    }
+                    Button { sheet = .settings } label: { Label("Settings", systemImage: "gearshape") }
+                    Button { sheet = .mobile } label: { Label("Phone", systemImage: "iphone") }
                     Spacer()
                 }
-                .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Theme.dim).padding(.top, 4)
+                .buttonStyle(ArgoButton()).padding(.top, 4)
             }.padding(10)
         }
         .frame(width: 248)
@@ -53,7 +50,7 @@ struct SidebarToolbar: View {
     var body: some View {
         let waiting = store.state?.attention.filter { $0.kind != "completed" }.count ?? 0
         let list = store.workspaceList(terminals: hub.members.map(\.workspace))
-        HStack(spacing: 13) {
+        HStack(spacing: 5) {
             Button { withAnimation(.easeOut(duration: 0.15)) { store.sidebarHidden.toggle() } } label: { Image(systemName: "sidebar.left") }
                 .help("Hide or show the sidebar").keyboardShortcut("b", modifiers: .command)
             Button(action: store.jumpToAttention) {
@@ -73,7 +70,7 @@ struct SidebarToolbar: View {
             Button { store.step(1, in: list) } label: { Image(systemName: "arrow.right") }.help("Next workspace")
             Spacer(minLength: 0)
         }
-        .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Theme.dim).tint(Theme.dim).frame(height: 30)
+        .buttonStyle(IconButton()).font(.system(size: 12.5)).foregroundStyle(Theme.dim).tint(Theme.dim).frame(height: 30)
     }
 }
 
@@ -105,7 +102,7 @@ struct WorkspaceTab: View {
                     }
                 }
                 Text(needs.first?.message ?? (counts.isEmpty ? path : "\(path) · \(counts)"))
-                    .font(.system(size: 10.5, design: .monospaced)).opacity(0.85).lineLimit(needs.isEmpty ? 1 : 2).truncationMode(.head)
+                    .font(.system(size: 10.5)).opacity(0.85).lineLimit(needs.isEmpty ? 1 : 2).truncationMode(.head)
                     .multilineTextAlignment(.leading)
             }
             .foregroundStyle(on ? Color.white : Theme.text)

@@ -15,13 +15,13 @@ struct WorkspaceView: View {
                 Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(Theme.dim)
                 Text(store.name(of: ws)).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.text)
                 Text("\(terminals.count) terminal\(terminals.count == 1 ? "" : "s")")
-                    .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.dim)
                 Spacer()
                 WorktreeMenu()
                 AddMemberMenu()
                 if store.filesHidden {
                     Button { store.filesHidden = false } label: { Image(systemName: "sidebar.right") }
-                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Show panel")
+                        .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Show panel")
                 }
             }
             .padding(.leading, store.sidebarHidden ? 110 : 10).padding(.trailing, 10).frame(height: 30).background(Theme.bg)
@@ -95,7 +95,7 @@ struct WaitingBanner: View {
                 Button("Open \(label) terminal") { hub.add(kind: t.effective.agent ?? "shell", project: store.project) }
                 Button("Run in background") { store.background(run: run.id, task: t.id) }
             }
-            .controlSize(.small).padding(.horizontal, 10).frame(height: 30).background(Theme.rowSelected)
+            .buttonStyle(ArgoButton()).padding(.horizontal, 10).frame(height: 34).background(Theme.rowSelected)
             HLine()
         }
     }
@@ -142,17 +142,13 @@ struct RunStrip: View {
             if let run = store.run {
                 HStack(spacing: 8) {
                     Text(run.hasRepo ? "\(run.status.pretty) · \(run.branch)" : "\(run.status.pretty) · no repo")
-                        .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
-                    if run.status == "awaiting_approval" {
-                        Button("Approve & run") { store.runAction("approve") }.buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: .command)
-                            .help("Click any agent label below to override it first")
-                    }
+                        .font(.system(size: 10.5)).foregroundStyle(Theme.dim).lineLimit(1)
                     if run.hasRepo, ["done", "needs_attention"].contains(run.status), run.report != nil {
                         Button(run.applied == true ? "Applied" : "Merge into \(run.baseBranch)") { store.runAction("apply") }.disabled(run.applied == true)
                     }
-                    if run.isActive || run.status == "awaiting_approval" { Button("Cancel") { store.runAction("cancel") } }
+                    if run.isActive { Button("Cancel run") { store.runAction("cancel") } }
                 }
-                .controlSize(.small).padding(.trailing, 8)
+                .buttonStyle(ArgoButton()).padding(.trailing, 8)
             }
         }
         .frame(height: 28).background(Theme.bg)

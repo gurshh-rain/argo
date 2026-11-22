@@ -16,6 +16,7 @@ enum Theme {
     static let green = Color.white
     static let red = Color(white: 0.7)
     static let amber = Color(white: 0.85)
+    /// Monospace is for terminal content only: agent output, command output and the terminals themselves.
     static let mono = Font.system(size: 12, design: .monospaced)
 
     static func status(_ s: String) -> Color {
@@ -53,7 +54,7 @@ struct Chip: View {
     let text: String
     var color: Color = Theme.dim
     var body: some View {
-        Text(text).font(.system(size: 10, weight: .medium, design: .monospaced))
+        Text(text).font(.system(size: 10, weight: .medium))
             .padding(.horizontal, 6).padding(.vertical, 2)
             .foregroundStyle(color)
             .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))
@@ -66,3 +67,51 @@ extension String {
 
 struct VLine: View { var body: some View { Rectangle().fill(Theme.line).frame(width: 1) } }
 struct HLine: View { var body: some View { Rectangle().fill(Theme.line).frame(height: 1) } }
+
+/// Text buttons. Primary is the one action we want taken; secondary is everything else; danger removes something.
+struct ArgoButton: ButtonStyle {
+    enum Kind { case primary, secondary, danger }
+    var kind: Kind = .secondary
+    var large = false
+    func makeBody(configuration: Configuration) -> some View { Look(configuration: configuration, kind: kind, large: large) }
+
+    private struct Look: View {
+        let configuration: Configuration
+        let kind: Kind
+        let large: Bool
+        @Environment(\.isEnabled) private var enabled
+        @State private var hover = false
+        var body: some View {
+            let fill: Color = kind == .primary ? Theme.ring : kind == .danger ? Theme.red.opacity(0.16) : Theme.chip
+            let text: Color = kind == .primary ? .white : kind == .danger ? Theme.red : Theme.text
+            configuration.label
+                .font(.system(size: large ? 13 : 12, weight: .medium)).foregroundStyle(text).lineLimit(1)
+                .padding(.horizontal, large ? 14 : 10).frame(height: large ? 30 : 24)
+                .background(fill, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(configuration.isPressed ? 0.0 : hover ? 0.08 : 0)))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(kind == .secondary ? Color.white.opacity(0.10) : .clear, lineWidth: 1))
+                .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+                .onHover { hover = $0 }
+                .animation(.easeOut(duration: 0.12), value: hover)
+        }
+    }
+}
+
+/// Icon-only buttons: no chrome until hovered, then a soft rounded highlight.
+struct IconButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { Look(configuration: configuration) }
+    private struct Look: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var enabled
+        @State private var hover = false
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, 4).frame(minWidth: 22, minHeight: 22)
+                .background(Color.white.opacity(configuration.isPressed ? 0.16 : hover ? 0.09 : 0), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .opacity(enabled ? 1 : 0.4)
+                .contentShape(Rectangle())
+                .onHover { hover = $0 }
+        }
+    }
+}

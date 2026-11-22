@@ -42,7 +42,7 @@ struct SettingsSheet: View {
             HStack {
                 Text("Reasoning applies to Claude Code and Codex; Devin encodes it in the model name.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { dismiss() }.buttonStyle(ArgoButton(large: true))
                 Button("Save") {
                     guard let s else { return }
                     var models: [String: String] = [:]
@@ -50,7 +50,7 @@ struct SettingsSheet: View {
                     store.saveSettings(["defaultAgent": s.defaultAgent, "models": models, "reasoning": s.reasoning, "maxParallel": s.maxParallel, "autoApprove": s.autoApprove,
                                         "callOnAttention": s.callOnAttention, "phoneNumber": s.phoneNumber, "checks": checks.split(separator: "\n").map(String.init)])
                     dismiss()
-                }.buttonStyle(.borderedProminent)
+                }.buttonStyle(ArgoButton(kind: .primary, large: true))
             }
         }
         .padding(20).frame(width: 560, height: 600)
@@ -73,16 +73,16 @@ struct MobileSheet: View {
             }
             HStack {
                 TextField("Public HTTPS address of the web app (from web/tunnel.sh)", text: $url).textFieldStyle(.roundedBorder)
-                Button("Save") { store.saveSettings(["publicUrl": url]) }
+                Button("Save") { store.saveSettings(["publicUrl": url]) }.buttonStyle(ArgoButton())
             }
             if let p = store.pair {
-                Text(p.code).font(.system(size: 40, weight: .bold, design: .monospaced)).kerning(6).textSelection(.enabled)
+                Text(p.code).font(.system(size: 40, weight: .bold)).monospacedDigit().kerning(6).textSelection(.enabled)
                 Text("Pairing code · single use · expires \(Date(timeIntervalSince1970: p.expires / 1000).formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary)
             }
             HStack {
-                Button("New code") { store.loadPair() }
+                Button("New code") { store.loadPair() }.buttonStyle(ArgoButton(large: true))
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button("Done") { dismiss() }.buttonStyle(ArgoButton(kind: .primary, large: true)).keyboardShortcut(.defaultAction)
             }
         }
         .padding(22).frame(width: 440)
