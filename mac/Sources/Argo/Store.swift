@@ -2,6 +2,11 @@ import SwiftUI
 import AppKit
 import UserNotifications
 
+/// A workspace is identified by a key: a folder path, or "ws:<id>" (and the legacy "") for one with no folder.
+enum WS {
+    static func folder(_ key: String) -> String { key.isEmpty || key.hasPrefix("ws:") ? "" : key }
+}
+
 @MainActor
 final class Store: ObservableObject {
     @Published var state: AppState?
@@ -30,9 +35,33 @@ final class Store: ObservableObject {
     }
 
     /// A run belongs to the folder it works in; runs without a project share the "" workspace.
-    func workspace(of run: Run) -> String { run.isResearch ? "" : run.project }
+    /// Names the user gave to workspaces (folder workspaces default to the folder's name).
+    @Published var names: [String: String] = (UserDefaults.standard.dictionary(forKey: "workspaceNames") as? [String: String]) ?? [:]
+    @Published var renaming: String?
+    /// Which workspace each run was started from. Runs without a folder would otherwise be indistinguishable.
+    private var owner: [String: String] = (UserDefaults.standard.dictionary(forKey: "runOwners") as? [String: String]) ?? [:]
+    /// The folder of the selected workspace, or "" when it has none.
+    var folder: String { WS.folder(project) }
+
+    func workspace(of run: Run) -> String {
+        if let o = owner[run.id], workspaces.contains(o) || o == project { return o }
+        return run.isResearch ? "" : run.project
+    }
+    /// A fresh, empty workspace with no folder: terminals start in your home folder and tasks need no repo.
+    func newWorkspace() {
+        let n = (workspaces.filter { $0.hasPrefix("ws:") }.count) + 1
+        let key = "ws:" + UUID().uuidString.prefix(8)
+        names[key] = "Workspace \(n)"
+        UserDefaults.standard.set(names, forKey: "workspaceNames")
+        select(workspace: key)
+    }
+    func rename(_ ws: String, to name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        names[ws] = n.isEmpty ? nil : n
+        UserDefaults.standard.set(names, forKey: "workspaceNames")
+    }
     func runs(in ws: String) -> [Run] { (state?.runs ?? []).filter { workspace(of: $0) == ws } }
-    func name(of ws: String) -> String { ws.isEmpty ? "No project" : (ws as NSString).lastPathComponent }
+    func name(of ws: String) -> String { names[ws] ?? (WS.folder(ws).isEmpty ? "No project" : (ws as NSString).lastPathComponent) }
 
     /// Every workspace worth showing: opened folders, the current one, and any with runs or terminals.
     func workspaceList(terminals: [String]) -> [String] {
@@ -43,7 +72,7 @@ final class Store: ObservableObject {
 
     func select(workspace ws: String) {
         project = ws
-        userClearedProject = ws.isEmpty
+        userClearedProject = WS.folder(ws).isEmpty
         UserDefaults.standard.set(ws, forKey: "project")
         remember(ws)
         selectedRun = runs(in: ws).first { !hiddenRuns.contains($0.id) }?.id
@@ -94,6 +123,8 @@ final class Store: ObservableObject {
         deleteRuns(runs(in: ws))
         workspaces.removeAll { $0 == ws }
         UserDefaults.standard.set(workspaces, forKey: "workspaces")
+        names[ws] = nil
+        UserDefaults.standard.set(names, forKey: "workspaceNames")
         if project == ws { select(workspace: workspaces.first ?? "") }
     }
 
@@ -178,7 +209,7 @@ final class Store: ObservableObject {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.prompt = "Use project"
+        panel.prompt = "Open as workspace"
         if panel.runModal() == .OK, let url = panel.url {
             select(workspace: url.path)
         }
@@ -194,7 +225,9 @@ final class Store: ObservableObject {
     func newRun(_ goal: String, terminals: Bool = false) {
         act {
             // no project chosen: a research run in a scratch folder, no repo needed
-            let r: Run = try await self.daemon.request("POST", "runs", body: ["project": self.project, "goal": goal, "terminals": terminals])
+            let r: Run = try await self.daemon.request("POST", "runs", body: ["project": self.folder, "goal": goal, "terminals": terminals])
+            self.owner[r.id] = self.project
+            UserDefaults.standard.set(self.owner, forKey: "runOwners")
             self.show(run: r.id)
             self.rightTab = "Record"
         }

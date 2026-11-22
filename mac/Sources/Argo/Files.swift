@@ -13,7 +13,7 @@ struct FilesPanel: View {
     struct Entry: Hashable { let path: String; let name: String; let isDir: Bool }
     struct Row: Identifiable { let entry: Entry; let depth: Int; var id: String { entry.path } }
 
-    var root: String { store.project.isEmpty ? NSHomeDirectory() : store.project }
+    var root: String { store.folder.isEmpty ? NSHomeDirectory() : store.folder }
 
     var body: some View {
         VStack(spacing: 0) {

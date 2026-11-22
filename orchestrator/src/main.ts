@@ -10,7 +10,12 @@ for (const d of [join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local
   if (!have.includes(d)) have.push(d)
 process.env.PATH = have.join(':')
 
+// One bad run must not take the orchestrator (and every other run) down with it.
+process.on('uncaughtException', (err) => console.error(new Date().toISOString(), 'uncaught exception:', err))
+process.on('unhandledRejection', (err) => console.error(new Date().toISOString(), 'unhandled rejection:', err))
+
 boot()
+console.log(new Date().toISOString(), 'starting')
 for (const a of agents()) console.log(`${a.installed ? '✓' : '✗'} ${a.label}${a.version ? ' ' + a.version : ' (not installed)'}`)
 const server = serve()
 server.on('error', (err: NodeJS.ErrnoException) => {

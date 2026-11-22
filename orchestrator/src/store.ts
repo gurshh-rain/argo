@@ -48,6 +48,8 @@ export function loadProject(project: string) {
       r.error = 'Orchestrator restarted while this run was in progress.'
       for (const t of r.tasks) if (t.status === 'running' || t.status === 'merging') (t.status = 'failed'), (t.error = 'Interrupted by restart')
     }
+    // nothing is waiting on a terminal any more once the orchestrator has restarted
+    for (const t of r.tasks) if (t.status !== 'done') (t.delegate = undefined), (t.terminal = undefined)
     runs.set(r.id, r)
   }
   for (const a of data.attention || []) if (!attention.find((x) => x.id === a.id)) attention.push(a)

@@ -108,6 +108,9 @@ struct RootView: View {
             Button(c.button, role: .destructive) { c.action() }
             Button("Cancel", role: .cancel) {}
         } message: { c in Text(c.message) }
+        .alert("Rename workspace", isPresented: Binding(get: { store.renaming != nil }, set: { if !$0 { store.renaming = nil } })) {
+            RenameField()
+        }
         .alert("Argo", isPresented: Binding(get: { store.banner != nil }, set: { if !$0 { store.banner = nil } })) {
             Button("OK") { store.banner = nil }
         } message: { Text(store.banner ?? "") }
@@ -118,5 +121,16 @@ struct RootView: View {
             Text(title).font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.text)
             Text(detail).font(.system(size: 12.5)).foregroundStyle(Theme.dim).multilineTextAlignment(.center).frame(maxWidth: 520)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Text field and buttons for the rename alert.
+struct RenameField: View {
+    @EnvironmentObject var store: Store
+    @State private var name = ""
+    var body: some View {
+        TextField("Name", text: $name).onAppear { name = store.renaming.map(store.name(of:)) ?? "" }
+        Button("Rename") { if let ws = store.renaming { store.rename(ws, to: name) } }
+        Button("Cancel", role: .cancel) {}
     }
 }

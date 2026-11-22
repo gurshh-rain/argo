@@ -14,6 +14,11 @@ struct Sidebar: View {
                         WorkspaceTab(ws: ws)
                         if ws == store.project { TeamSection(ws: ws) }
                     }
+                    Button(action: store.newWorkspace) {
+                        Label("New workspace", systemImage: "plus").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
+                            .padding(.horizontal, 10).padding(.vertical, 7).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).help("Add another workspace. Use the + menu to open a folder as one.")
                 }.padding(.horizontal, 6)
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -55,15 +60,15 @@ struct SidebarToolbar: View {
                 Image(systemName: waiting > 0 ? "bell.badge" : "bell").foregroundStyle(waiting > 0 ? Theme.ring : Theme.dim)
             }.help(waiting > 0 ? "\(waiting) agent\(waiting == 1 ? "" : "s") waiting for you" : "No notifications")
             Menu {
+                Button("New workspace", action: store.newWorkspace)
+                Button("Open folder as workspace…", action: store.chooseProject)
+                Divider()
                 ForEach(TeamHub.kinds, id: \.id) { k in
                     Button("New \(k.label) terminal") { hub.add(kind: k.id, project: store.project) }
                         .disabled(k.bin != nil && !(store.agent(k.id)?.installed ?? true))
                 }
-                Divider()
-                Button("Open project…", action: store.chooseProject)
-                Button("No project (research)", action: store.clearProject).disabled(store.project.isEmpty)
             } label: { Image(systemName: "plus") }
-            .menuStyle(.borderlessButton).fixedSize().help("New terminal or project")
+            .menuStyle(.borderlessButton).fixedSize().help("New workspace or terminal")
             Button { store.step(-1, in: list) } label: { Image(systemName: "arrow.left") }.help("Previous workspace")
             Button { store.step(1, in: list) } label: { Image(systemName: "arrow.right") }.help("Next workspace")
             Spacer(minLength: 0)
@@ -84,7 +89,7 @@ struct WorkspaceTab: View {
         let needs = runs.flatMap { store.attention(for: $0.id) }
         let active = runs.filter(\.isActive).count
         let ringing = terminals.contains { hub.ringing.contains($0.id) }
-        let path = ws.isEmpty ? "research and questions" : ws.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        let path = WS.folder(ws).isEmpty ? "no folder" : ws.replacingOccurrences(of: NSHomeDirectory(), with: "~")
         let counts = [terminals.isEmpty ? nil : "\(terminals.count) terminal\(terminals.count == 1 ? "" : "s")",
                       active > 0 ? "\(active) running" : nil].compactMap { $0 }.joined(separator: " · ")
         Button { store.select(workspace: ws) } label: {
@@ -109,15 +114,16 @@ struct WorkspaceTab: View {
             .overlay(RoundedRectangle(cornerRadius: 6).stroke((!needs.isEmpty || ringing) && !on ? Theme.ring : Color.clear, lineWidth: 1.5))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).help(ws.isEmpty ? "Runs started without a project" : ws)
+        .buttonStyle(.plain).help(WS.folder(ws).isEmpty ? "A workspace without a folder: terminals start in your home folder" : ws)
         .contextMenu {
-            if !ws.isEmpty { Button("Reveal in Finder") { NSWorkspace.shared.open(URL(fileURLWithPath: ws)) } }
+            Button("Rename…") { store.renaming = ws }
+            if !WS.folder(ws).isEmpty { Button("Reveal in Finder") { NSWorkspace.shared.open(URL(fileURLWithPath: ws)) } }
             Button("Delete workspace…", role: .destructive) {
                 let n = runs.count, t = terminals.count
                 store.confirm = Store.Confirm(
                     title: "Delete the workspace “\(store.name(of: ws))”?",
                     message: "This closes its \(t) terminal\(t == 1 ? "" : "s") and deletes its \(n) run\(n == 1 ? "" : "s") with their records."
-                        + (ws.isEmpty ? "" : " The folder and its files are not touched; branches with unmerged work are kept."),
+                        + (WS.folder(ws).isEmpty ? "" : " The folder and its files are not touched; branches with unmerged work are kept."),
                     button: "Delete workspace"
                 ) {
                     hub.closeAll(in: ws)

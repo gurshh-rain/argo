@@ -47,8 +47,10 @@ final class Daemon {
         p.currentDirectoryURL = dir
         let log = Self.home.appendingPathComponent("orchestrator.log")
         try? FileManager.default.createDirectory(at: Self.home, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: log.path, contents: nil)
+        // append, so the reason for an earlier exit is still there to read
+        if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil) }
         if let h = try? FileHandle(forWritingTo: log) {
+            _ = try? h.seekToEnd()
             p.standardOutput = h
             p.standardError = h
         }

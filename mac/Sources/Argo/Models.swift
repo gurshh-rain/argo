@@ -46,7 +46,7 @@ struct TaskItem: Codable, Identifiable, Hashable {
         ranWith ?? Assignment(agent: override?.agent ?? auto.agent, model: override?.model ?? auto.model, reasoning: override?.reasoning ?? auto.reasoning)
     }
     /// Handed to one of the user's terminals rather than shown as its own pane.
-    var inTerminal: Bool { delegate != nil || terminal != nil }
+    var inTerminal: Bool { delegate != nil || (terminal != nil && status == "done") }
     var canOverride: Bool { ["pending", "failed", "needs_attention"].contains(status) }
 }
 

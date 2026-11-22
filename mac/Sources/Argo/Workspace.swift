@@ -13,7 +13,7 @@ struct WorkspaceView: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(Theme.dim)
-                Text(ws.isEmpty ? "~" : store.name(of: ws)).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.text)
+                Text(store.name(of: ws)).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.text)
                 Text("\(terminals.count) terminal\(terminals.count == 1 ? "" : "s")")
                     .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.dim)
                 Spacer()

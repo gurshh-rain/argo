@@ -149,11 +149,12 @@ final class TeamHub: ObservableObject {
     /// Opens a terminal. It splits off `beside` (default: the focused pane), to the right or below.
     /// `in`: a worktree to work in instead of the project checkout; defaults to the worktree of the pane it splits from.
     func add(kind: String, project: String, beside: UUID? = nil, horizontal: Bool = true, in tree: WorktreeInfo? = nil) {
+        let folder = WS.folder(project)
         let from = beside.flatMap { id in members.first { $0.id == id } }
         let worktree = tree?.name ?? from?.worktree
-        let cwd = tree?.path ?? (from?.worktree != nil ? from!.cwd : (project.isEmpty ? NSHomeDirectory() : project))
+        let cwd = tree?.path ?? (from?.worktree != nil ? from!.cwd : (folder.isEmpty ? NSHomeDirectory() : folder))
         // the shared record and roster live in the project, so every worktree's agents read the same ones
-        let home = project.isEmpty ? cwd : project
+        let home = folder.isEmpty ? cwd : folder
         let n = (members.filter { $0.kind == kind && $0.workspace == project }.map { Int($0.name.split(separator: " ").last ?? "") ?? 0 }.max() ?? 0) + 1
         let label = Self.kinds.first { $0.id == kind }?.label ?? kind
         let m = Member(name: "\(label) \(n)", kind: kind, cwd: cwd, workspace: project, worktree: worktree)
@@ -207,6 +208,8 @@ final class TeamHub: ObservableObject {
 
     /// Lists the team so each agent can see who else is working alongside it.
     private func writeRoster(project: String) {
+        // only real project folders get a roster; a workspace without a folder runs in the home folder
+        guard project != NSHomeDirectory() else { return }
         let dir = (project as NSString).appendingPathComponent(".argo")
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         var s = "# Argo team\n\nTerminals currently open in this project. Each is a separate agent working in parallel.\n\n"

@@ -136,7 +136,7 @@ struct Composer: View {
                 }.pickerStyle(.segmented).fixedSize().labelsHidden()
             }
             Text("❯").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.ring)
-            TextField(followup ? "Tell the agents what to do next…" : (store.project.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.project as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
+            TextField(followup ? "Tell the agents what to do next…" : (store.folder.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.folder as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
                 .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1...4)
                 .onSubmit(send)
             Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.system(size: 20)) }
