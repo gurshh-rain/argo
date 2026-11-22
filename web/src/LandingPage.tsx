@@ -11,12 +11,13 @@ const repository = 'https://github.com/gurshh-rain/yc-hacky'
 // produces (Argo-<version>-<arch>.dmg); update it when you publish a new version.
 const dmgUrl = `${repository}/releases/latest/download/Argo-0.1.0-arm64.dmg`
 
-const features: { icon: IconName; title: string; description: string; span: string }[] = [
-  { icon: 'layers', title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4' },
-  { icon: 'swap', title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2' },
-  { icon: 'shield', title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2' },
-  { icon: 'mic', title: 'Control it by voice.', description: 'Speak a task or a follow-up from your phone, confirm the transcript, and hear a spoken status.', span: 'cv-span-2' },
-  { icon: 'phone', title: 'They call you.', description: 'A blocked agent, a failure or a finished run rings your phone. Answer, and it reaches the right agent.', span: 'cv-span-2' },
+type Feature = { icon: IconName; title: string; description: string; span: string; shot: string; alt: string; focus?: string }
+const features: Feature[] = [
+  { icon: 'layers', title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4', shot: '/media/app/workspaces.jpg', alt: 'Argo sidebar with workspaces, and the Worktree and Add member controls', focus: 'left top' },
+  { icon: 'swap', title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
+  { icon: 'shield', title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2', shot: '/media/app/report.jpg', alt: 'The orchestrator report listing what is complete and what needs attention', focus: 'left top' },
+  { icon: 'mic', title: 'Control it by voice.', description: 'Speak a task or a follow-up, confirm the transcript, and hear a spoken status.', span: 'cv-span-2', shot: '/media/app/composer.jpg', alt: 'The composer with Follow-up and New task modes and a microphone button', focus: 'left bottom' },
+  { icon: 'phone', title: 'They call you.', description: 'A blocked agent, a failure or a finished run rings your phone. Answer, and it reaches the right agent.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin, with the Phone button', focus: 'left center' },
 ]
 
 function MacIcon() {
@@ -66,25 +67,30 @@ export function LandingPage() {
                   <span className="cv-card-icon"><Icon name={f.icon} width="22" height="22" /></span>
                   <h3>{f.title}</h3>
                   <p>{f.description}</p>
+                  <div className="cv-shot"><img src={f.shot} alt={f.alt} loading="lazy" decoding="async" style={{ objectPosition: f.focus }} /></div>
                 </article>
               ))}
+            </div>
+          </section>
+
+          <section className="cv-section" id="app" aria-labelledby="app-title">
+            <p className="cv-eyebrow">The app</p>
+            <h2 id="app-title">Your whole crew, in one window.</h2>
+            <div className="cv-window cv-window-section">
+              <div className="cv-window-bar" aria-hidden="true"><span /><span /><span /></div>
+              <img src="/media/app/app.jpg" alt="Argo on Mac: workspaces in the sidebar, an agent's subtask output, and the orchestrator's report" width="1600" height="1263" />
             </div>
           </section>
 
           <section className="cv-section" id="download" aria-labelledby="download-title">
             <h2 id="download-title">Runs wherever you work.</h2>
             <div className="cv-grid cv-where">
-              <article className="cv-card cv-span-2">
+              <article className="cv-card cv-span-3">
                 <h3>Mac</h3>
                 <p>Native SwiftUI app with a tab per run, split agent panes and notification rings.</p>
                 <a href={dmgUrl} className="cv-pill cv-pill-block"><MacIcon />Download the DMG</a>
               </article>
-              <article className="cv-card cv-span-2">
-                <h3>Phone</h3>
-                <p>Speak a task, confirm the transcript, and hear a status. Works from any browser.</p>
-                <Link to="/app" className="cv-pill cv-pill-block">Open the console</Link>
-              </article>
-              <article className="cv-card cv-span-2">
+              <article className="cv-card cv-span-3">
                 <h3>From source</h3>
                 <p>Needs macOS 14, Node 24 and one coding agent CLI.</p>
                 <CopyCommand command="mac/build.sh" />
