@@ -6,9 +6,9 @@ git worktrees, merges, checks, reviews and reports. Check on it, or redirect it,
 
 ## Demo
 
-[![Argo demo: plays automatically and loops. Click for the full-quality video.](.github/assets/demo.gif)](web/public/media/argo.mp4)
+[![Argo demo: the first 30 seconds, looping. Click for the full video.](.github/assets/demo.gif)](web/public/media/argo.mp4)
 
-▶ [Watch the full-quality video](web/public/media/argo.mp4) (1 min 54 s, the same film shown on the website)
+▶ [Watch the full video](web/public/media/argo.mp4) (1 min 54 s, the same film shown on the website)
 
 ```
 mac/            Native macOS app (SwiftUI, cmux-style: vertical run tabs, split agent panes, notification rings)
