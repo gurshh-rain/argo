@@ -12,6 +12,7 @@ APP=build/Argo.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/orchestrator"
 cp .build/release/Argo "$APP/Contents/MacOS/Argo"
+cp Resources/*.png "$APP/Contents/Resources/"
 cp -R ../orchestrator/src ../orchestrator/package.json "$APP/Contents/Resources/orchestrator/"
 # the icon is generated from the logo with: swift make-icon.swift ../web/public/argo.png
 cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"

@@ -77,6 +77,14 @@ struct MenuBarContent: View {
     @EnvironmentObject var hub: TeamHub
     @Environment(\.openWindow) var openWindow
 
+    /// The Argo star (made from web/public/media/argo.png), as a template so it follows the menu bar's color.
+    static let logo: NSImage? = {
+        guard let img = NSImage(named: "MenuBarIcon") else { return nil }
+        img.isTemplate = true
+        img.size = NSSize(width: img.size.width * 18 / max(img.size.height, 1), height: 18)
+        return img
+    }()
+
     static func needsCount(_ store: Store, _ hub: TeamHub) -> Int {
         (store.state?.runs ?? []).reduce(0) { $0 + store.attention(for: $1.id).count } + hub.ringing.count
     }

@@ -83,7 +83,13 @@ struct ArgoApp: App {
         MenuBarExtra {
             MenuBarContent().environmentObject(store).environmentObject(hub)
         } label: {
-            Image(systemName: MenuBarContent.needsCount(store, hub) > 0 ? "bell.badge.fill" : "point.3.connected.trianglepath.dotted")
+            if MenuBarContent.needsCount(store, hub) > 0 {
+                Image(systemName: "bell.badge.fill")
+            } else if let logo = MenuBarContent.logo {
+                Image(nsImage: logo)
+            } else {
+                Image(systemName: "sparkle")
+            }
         }
     }
 }
