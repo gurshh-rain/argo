@@ -128,3 +128,43 @@ struct IconButton: ButtonStyle {
         }
     }
 }
+
+/// A compact segmented switch in Argo's own style: a soft track with the chosen option raised on it.
+struct Segmented<Value: Hashable>: View {
+    struct Option { let value: Value; let label: String; var icon: String? = nil }
+    @Binding var selection: Value
+    let options: [Option]
+    var large = false
+    @Namespace private var ns
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, o in
+                let on = o.value == selection
+                Button { withAnimation(.easeOut(duration: 0.15)) { selection = o.value } } label: {
+                    HStack(spacing: 5) {
+                        if let icon = o.icon { Image(systemName: icon).font(.system(size: large ? 11.5 : 10.5)) }
+                        Text(o.label).fixedSize()
+                    }
+                    .font(.system(size: large ? 12.5 : 12, weight: on ? .semibold : .medium))
+                    .foregroundStyle(on ? Theme.text : Theme.dim)
+                    .padding(.horizontal, large ? 14 : 10).frame(height: large ? 26 : 22)
+                    .frame(maxWidth: large ? .infinity : nil)
+                    .background {
+                        if on {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Theme.rowSelected)
+                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.primary.opacity(0.10), lineWidth: 1))
+                                .matchedGeometryEffect(id: "pick", in: ns)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .background(Theme.chip.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 1))
+    }
+}

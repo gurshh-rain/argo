@@ -29,9 +29,14 @@ struct SettingsSheet: View {
             if let binding = Binding($s) {
                 Form {
                     Section("Appearance") {
-                        Picker("Theme", selection: $appearance) {
-                            ForEach(Appearance.allCases) { Text($0.label).tag($0.rawValue) }
-                        }.pickerStyle(.segmented)
+                        HStack {
+                            Text("Theme")
+                            Spacer()
+                            Segmented(selection: $appearance, options: Appearance.allCases.map {
+                                .init(value: $0.rawValue, label: $0.label, icon: $0 == .system ? "circle.lefthalf.filled" : $0 == .light ? "sun.max" : "moon")
+                            }, large: true)
+                            .frame(width: 300)
+                        }
                     }
                     Section("Updates") {
                         HStack {

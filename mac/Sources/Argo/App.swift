@@ -17,12 +17,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let i = args.firstIndex(of: "--snapshot"), args.count > i + 1 else { return }
         let delay = Double(ProcessInfo.processInfo.environment["ARGO_SNAPSHOT_DELAY"] ?? "") ?? 5
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            if let v = NSApp.windows.first(where: { $0.contentView != nil && $0.frame.width > 600 })?.contentView,
+            // with ARGO_SHEET set, capture the open sheet rather than the window behind it
+            let main = NSApp.windows.first(where: { $0.contentView != nil && $0.frame.width > 600 })
+            let target = ProcessInfo.processInfo.environment["ARGO_SHEET"] != nil ? (main?.attachedSheet ?? main) : main
+            if let v = target?.contentView,
                let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
                 v.cacheDisplay(in: v.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[i + 1]))
             }
             if let dump = AppDelegate.dump { try? dump().write(toFile: args[i + 1] + ".txt", atomically: true, encoding: .utf8) }
+            // an open sheet makes macOS refuse a normal quit
+            if ProcessInfo.processInfo.environment["ARGO_SHEET"] != nil { exit(0) }
             NSApp.terminate(nil)
         }
     }

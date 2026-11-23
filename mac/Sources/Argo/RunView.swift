@@ -175,10 +175,12 @@ struct Composer: View {
             }
             HStack(spacing: 8) {
                 if store.run != nil {
-                    Picker("", selection: $forceNew) {
-                        Text("Follow-up").tag(false)
-                        Text("New task").tag(true)
-                    }.pickerStyle(.segmented).fixedSize().labelsHidden()
+                    Segmented(selection: $forceNew, options: [
+                        .init(value: false, label: "Follow-up", icon: "arrowshape.turn.up.right"),
+                        .init(value: true, label: "New task", icon: "plus"),
+                    ])
+                    .fixedSize()
+                    .help(forceNew ? "Starts a separate run" : "Adds to the run that is showing")
                 }
                 Text("❯").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.ring)
                 TextField(followup ? "Tell the agents what to do next…" : (store.folder.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.folder as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
