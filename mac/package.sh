@@ -2,6 +2,8 @@
 # Builds Argo.app and packages it for a GitHub release:
 #   mac/dist/Argo-<version>-<arch>.zip   (what the release should carry)
 #   mac/dist/Argo-<version>-<arch>.dmg   (drag-to-Applications image)
+#   mac/dist/Argo.dmg                    (the same image under a fixed name: the website links to
+#                                         releases/latest/download/Argo.dmg, so attach this one too)
 # Usage: mac/package.sh [version]      e.g. mac/package.sh 0.1.0
 set -e
 cd "$(dirname "$0")"
@@ -17,8 +19,9 @@ STAGE=$(mktemp -d)
 cp -R build/Argo.app "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 hdiutil create -quiet -volname "Argo $VERSION" -srcfolder "$STAGE" -ov -format UDZO "dist/$NAME.dmg"
+cp "dist/$NAME.dmg" dist/Argo.dmg
 rm -rf "$STAGE"
-( cd dist && shasum -a 256 "$NAME.zip" "$NAME.dmg" > SHA256SUMS.txt )
+( cd dist && shasum -a 256 "$NAME.zip" "$NAME.dmg" Argo.dmg > SHA256SUMS.txt )
 echo
 ls -lh dist
 echo

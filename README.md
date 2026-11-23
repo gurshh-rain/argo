@@ -87,6 +87,7 @@ The app is ad-hoc signed, not notarized, so on another Mac the first launch need
 (or `xattr -dr com.apple.quarantine /Applications/Argo.app`). It is built for the architecture of the
 Mac that packages it, and needs Node 24+ and at least one coding CLI on the user's PATH.
 
-Publish it as a GitHub release on the tag `v<version>` with the DMG attached under the name `package.sh`
-gives it: **Check for Updates** in the app reads the latest release, and the website's download link
-expects that file name.
+Publish it as a GitHub release on the tag `v<version>` and attach both DMGs from `mac/dist/`. The website's
+Download buttons link to `releases/latest/download/Argo.dmg`, which GitHub redirects to the `Argo.dmg` in the
+newest release, so the site needs no change per version. **Check for Updates** in the app reads the same
+latest release.

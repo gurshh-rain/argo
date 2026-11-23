@@ -9,9 +9,10 @@ import './app.css'
 import './landing.css'
 
 const repository = 'https://github.com/gurshh-rain/yc-hacky'
-// Direct link to the DMG attached to the latest GitHub release. The file name is what mac/package.sh
-// produces (Argo-<version>-<arch>.dmg); update it when you publish a new version.
-const dmgUrl = `${repository}/releases/latest/download/Argo-0.1.4-arm64.dmg`
+// Direct link to the DMG attached to the latest GitHub release.
+// GitHub redirects releases/latest/download/<file> to that file in the newest release, so this link
+// always serves the latest DMG. mac/package.sh writes it as Argo.dmg; attach it to every release.
+const dmgUrl = `${repository}/releases/latest/download/Argo.dmg`
 
 type Feature = { title: string; description: string; span: string; shot: string; alt: string; focus?: string }
 const features: Feature[] = [
