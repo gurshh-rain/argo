@@ -33,7 +33,7 @@ export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconN
 }
 
 export function Brand() {
-  return <span className="brand"><span className="brand-symbol" aria-hidden="true"><img src="/argo.png" alt="" width="1728" height="2304" /></span><span>argo</span></span>
+  return <span className="brand"><span className="brand-symbol" aria-hidden="true"><img src="/media/argo.png" alt="" width="1728" height="2304" /></span><span>argo</span></span>
 }
 
 export function ThemeToggle() {

@@ -9,14 +9,16 @@ struct SettingsSheet: View {
     @State private var s: Settings?
     @State private var checks = ""
     @AppStorage(Appearance.key) private var appearance = Appearance.dark.rawValue
-    @StateObject private var updater = Updater()
+    @ObservedObject private var updater = Updater.shared
 
     @ViewBuilder var updateStatus: some View {
-        switch updater.status {
+        switch updater.phase {
         case .idle: Text("Checks the latest release on GitHub.").foregroundStyle(.secondary)
         case .checking: Text("Checking…").foregroundStyle(.secondary)
-        case .upToDate(let v): Text("You're up to date (\(v)).").foregroundStyle(.secondary)
-        case .available(let v, _): Text("Version \(v) is available.").foregroundStyle(Theme.ring)
+        case .upToDate: Text("You're up to date.").foregroundStyle(.secondary)
+        case .available(let v, _): Text("Version \(v) is available. It downloads and installs here, then Argo reopens.").foregroundStyle(Theme.ring)
+        case .downloading(let pct): Text("Downloading… \(pct)%").foregroundStyle(.secondary)
+        case .installing: Text("Installing. Argo will reopen in a moment.").foregroundStyle(.secondary)
         case .failed(let m): Text(m).foregroundStyle(Theme.amber).textSelection(.enabled)
         }
     }
@@ -38,11 +40,12 @@ struct SettingsSheet: View {
                                 updateStatus.font(.caption)
                             }
                             Spacer()
-                            if case .available(_, let url) = updater.status {
-                                Button("Download") { NSWorkspace.shared.open(url) }.buttonStyle(ArgoButton(kind: .primary))
+                            if case .available = updater.phase {
+                                Button("Install update") { updater.install(store: store) }.buttonStyle(ArgoButton(kind: .primary))
                             }
-                            Button("Check for Updates") { updater.check() }.buttonStyle(ArgoButton())
-                                .disabled(updater.status == .checking)
+                            if case .downloading(let pct) = updater.phase { ProgressView(value: Double(pct), total: 100).frame(width: 90) }
+                            Button("Check for Updates") { Task { await updater.check() } }.buttonStyle(ArgoButton())
+                                .disabled(updater.busy)
                         }
                     }
                     Section("Model controls") {

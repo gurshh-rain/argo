@@ -15,12 +15,12 @@ const repository = 'https://github.com/gurshh-rain/yc-hacky'
 // always serves the latest DMG. mac/package.sh writes it as Argo.dmg; attach it to every release.
 const dmgUrl = `${repository}/releases/latest/download/Argo.dmg`
 
-type Feature = { title: string; description: string; span: string; shot: string; alt: string; focus?: string }
+type Feature = { title: string; description: string; span: string; shot: string; alt: string; focus?: string; device?: boolean }
 const features: Feature[] = [
   { title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4', shot: '/media/app/workspaces.jpg', alt: 'Argo sidebar with workspaces, and the Worktree and Add member controls', focus: 'left top' },
   { title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
   { title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2', shot: '/media/app/report.jpg', alt: 'The orchestrator report listing what is complete and what needs attention', focus: 'left top' },
-  { title: 'Steer it as it runs.', description: 'Send a follow-up to a running task, or start a new one, from the same composer.', span: 'cv-span-2', shot: '/media/app/composer.jpg', alt: 'The task composer', focus: 'left bottom' },
+  { title: 'Connect local models.', description: 'Run open models through Ollama on your own Mac, right alongside the cloud agents. Your code stays on your machine.', span: 'cv-span-2', shot: '/media/mac-mini.png', alt: 'A Mac mini, front view', device: true },
   { title: 'Know when they need you.', description: 'A blocked agent, a failure or a finished run raises a notification ring and a macOS notification.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin', focus: 'left center' },
 ]
 
@@ -139,7 +139,7 @@ export function LandingPage() {
                   <h3 className="du-card-title">{f.title}</h3>
                   <p>{f.description}</p>
                   <div className="cv-feature-visual">
-                    <figure className="cv-shot"><img src={f.shot} alt={f.alt} loading="lazy" decoding="async" style={{ objectPosition: f.focus }} /></figure>
+                    <figure className={`cv-shot${f.device ? ' cv-shot-device' : ''}`}><img src={f.shot} alt={f.alt} loading="lazy" decoding="async" style={{ objectPosition: f.focus }} /></figure>
                   </div>
                 </article>
               ))}

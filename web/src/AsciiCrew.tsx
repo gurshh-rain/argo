@@ -159,7 +159,7 @@ export function AsciiCrew({ className = '' }: { className?: string }) {
     }
 
     logo.onload = () => { if (!disposed) resize() }
-    logo.src = '/argo.png'
+    logo.src = '/media/argo.png'
     const sizing = new ResizeObserver(resize)
     sizing.observe(element)
     const viewing = new IntersectionObserver(([entry]) => {

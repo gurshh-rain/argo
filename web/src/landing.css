@@ -142,6 +142,11 @@
 .cv-card:hover .cv-shot { opacity: 1; transform: perspective(950px) rotateX(4deg) rotateY(-5deg) rotateZ(.5deg) translateY(-3px); }
 .cv-span-4 .cv-shot { width: calc(100% - 36px); height: 235px; }
 .cv-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A transparent product illustration instead of a framed app screenshot. */
+.cv-card .cv-shot.cv-shot-device { right: 0; transform: none; bottom: 0; width: 100%; height: 190px; padding: 0 36px 26px; box-sizing: border-box; border: 0; border-radius: 0; background: transparent; box-shadow: none; opacity: 1; }
+.cv-shot.cv-shot-device img { object-fit: contain; object-position: center bottom; }
+.cv-card:hover .cv-shot.cv-shot-device { transform: translateY(-4px); }
+@media (max-width: 767px) { .cv-card .cv-shot.cv-shot-device, .cv-card:hover .cv-shot.cv-shot-device { transform: none; } }
 .cv-app-section { isolation: isolate; }
 /* Carry the gray surface across the viewport, fading into the black page at both ends. */
 .cv-app-section::before { content: ''; position: absolute; z-index: -1; inset-block: 0; left: 50%; width: 100vw; transform: translateX(-50%); background: linear-gradient(to bottom, transparent, var(--color-base-200) 22%, var(--color-base-200) 78%, transparent); pointer-events: none; }

@@ -95,14 +95,29 @@ cd web && wasp compile
 ## Packaging a release
 
 ```sh
-mac/package.sh 0.1.3      # builds, then writes mac/dist/Argo-0.1.3-arm64.zip, .dmg and SHA256SUMS.txt
+mac/package.sh 0.1.3      # builds, then writes the zip, both DMGs, SHA256SUMS.txt and latest.json to mac/dist/
 ```
 
 The app is ad-hoc signed, not notarized, so on another Mac the first launch needs right-click → Open
 (or `xattr -dr com.apple.quarantine /Applications/Argo.app`). It is built for the architecture of the
 Mac that packages it, and needs Node 24+ and at least one coding CLI on the user's PATH.
 
-Publish it as a GitHub release on the tag `v<version>` and attach both DMGs from `mac/dist/`. The website's
-Download buttons link to `releases/latest/download/Argo.dmg`, which GitHub redirects to the `Argo.dmg` in the
-newest release, so the site needs no change per version. **Check for Updates** in the app reads the same
-latest release.
+Publish it as a GitHub release on the tag `v<version>` and attach everything in `mac/dist/`: both DMGs,
+the zip, `SHA256SUMS.txt` and `latest.json`.
+
+- The website's Download buttons link to `releases/latest/download/Argo.dmg`, which GitHub redirects to
+  the `Argo.dmg` in the newest release, so the site needs no change per version.
+- The app updates itself from `releases/latest/download/latest.json`. It checks at launch and every
+  six hours, shows **Update to x.y.z** at the bottom of the sidebar, and on click downloads the DMG,
+  installs it in place and reopens. A release without `latest.json` is invisible to installed copies.
+
+### Update signing
+
+`latest.json` carries an Ed25519 signature over the DMG. The app only installs an image whose signature
+matches the public key compiled into `mac/Sources/Argo/Update.swift`, so a tampered download is refused.
+
+- The private key is at `~/.argo-signing/ed25519.key` on the Mac that cut the first signed release. It is
+  not in the repository. Back it up; whoever packages a release needs it (or `ARGO_PRIVATE_KEY_FILE`).
+- Without the key `mac/package.sh` still builds but writes no `latest.json`.
+- If the key is lost, generate a new one with `swift mac/argo-sign.swift keygen` and put its public key in
+  `Update.swift`. Copies already installed trust only the old key and must be updated by hand once.

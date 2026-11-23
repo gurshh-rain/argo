@@ -13,7 +13,7 @@ export default app({
   wasp: { version: "^0.26.1" },
   title: "argo - ai orchestration",
   head: [
-    "<link rel='icon' type='image/png' href='/argo.png' />",
+    "<link rel='icon' type='image/png' href='/media/argo.png' />",
     "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover' />",
     "<meta name='theme-color' content='#111214' />",
     "<meta name='description' content='Bring Claude Code, Codex, and Devin together. Plan, build, and review in one native Mac workspace.' />",

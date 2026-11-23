@@ -32,6 +32,7 @@ struct Sidebar: View {
                     .font(.system(size: 10.5))
                     .help(a.note ?? (a.id == "ollama" && a.installed == true ? a.models.map { "\($0.id) (\($0.note))" }.joined(separator: "\n") : a.version ?? ""))
                 }
+                UpdatePill()
                 HStack {
                     Button { sheet = .settings } label: { Label("Settings", systemImage: "gearshape") }
                     Button { sheet = .mobile } label: { Label("Phone", systemImage: "iphone") }

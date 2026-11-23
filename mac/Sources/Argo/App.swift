@@ -56,6 +56,13 @@ struct ArgoApp: App {
                 }
                 .onAppear {
                     store.start()
+                    // look for a newer release at launch, then every six hours while open
+                    Task {
+                        while !Task.isCancelled {
+                            await Updater.shared.check(silent: true)
+                            try? await Task.sleep(nanoseconds: 6 * 3600 * 1_000_000_000)
+                        }
+                    }
                     hub.watchAppearance()
                     AppDelegate.dump = { [hub] in hub.dumpText() }
                     // `ARGO_TAB=Report` opens that right-hand tab shortly after launch (for headless UI checks).
