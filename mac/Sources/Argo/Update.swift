@@ -225,7 +225,12 @@ enum Installer {
         helper.executableURL = URL(fileURLWithPath: "/bin/sh")
         helper.arguments = [file.path]
         try helper.run() // not waited for: it waits on us
+        // An open sheet (Settings, where "Install update" lives) makes macOS refuse a normal quit, which
+        // left the helper waiting forever. Close sheets first, and if the app is still alive a moment
+        // later, exit outright: everything worth saving is already on disk.
+        for w in NSApp.windows { if let sheet = w.attachedSheet { w.endSheet(sheet) } }
         NSApp.terminate(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { exit(0) }
     }
 }
 

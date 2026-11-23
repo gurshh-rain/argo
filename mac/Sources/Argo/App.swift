@@ -124,6 +124,8 @@ struct RootView: View {
             if store.sidebarHidden { SidebarToolbar().frame(width: 30, alignment: .leading).clipped().padding(.leading, 78) }
         }
         .ignoresSafeArea()
+        // `ARGO_SHEET=settings` opens that sheet at launch (for headless checks of what a sheet blocks)
+        .onAppear { if let name = ProcessInfo.processInfo.environment["ARGO_SHEET"] { sheet = Sheet(rawValue: name) } }
         .sheet(item: $sheet) { s in
             Group { if s == .settings { SettingsSheet() } else { MobileSheet() } }.environmentObject(store)
         }
