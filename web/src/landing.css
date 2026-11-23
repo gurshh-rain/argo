@@ -55,11 +55,34 @@
 }
 
 .cv-column { max-width: 1160px; margin-inline: auto; min-height: 100vh; }
-.cv-header { position: sticky; top: 0; z-index: 40; isolation: isolate; display: flex; align-items: center; justify-content: space-between; height: 76px; padding: 0 40px; }
+.cv-header { position: sticky; top: 0; z-index: 40; isolation: isolate; display: flex; align-items: flex-start; justify-content: center; height: 76px; padding: 0 40px; transition: height .45s cubic-bezier(.2, .8, .2, 1); --cv-notch-w: 548px; }
 .cv-header::before { content: ''; position: absolute; z-index: -1; inset: 0 0 -24px; background: color-mix(in srgb, var(--color-base-100) 92%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); mask-image: linear-gradient(#000 calc(100% - 24px), transparent); pointer-events: none; }
 .cv .brand { gap: 7px; font-size: 24px; font-weight: 650; letter-spacing: -.045em; }
 .cv .brand-symbol { width: 28px; }
-.cv-header nav { display: flex; align-items: center; gap: 20px; }
+.cv-header nav { display: flex; align-items: center; gap: 20px; transition: gap .45s cubic-bezier(.2, .8, .2, 1); }
+
+/* Header → MacBook notch. At the top of the page the bar spans the column; once scrolled, its contents fold
+   into a black notch hanging from the top edge, with the small concave "ears" where a real notch meets the bezel.
+   The notch is black in both themes, like the hardware. */
+.cv-header-inner { position: relative; display: flex; align-items: center; justify-content: space-between; width: 100%; height: 76px; padding: 0; border-radius: 0 0 20px 20px; background: transparent; transition: width .45s cubic-bezier(.2, .8, .2, 1), height .45s cubic-bezier(.2, .8, .2, 1), padding .45s cubic-bezier(.2, .8, .2, 1), background-color .3s, box-shadow .3s; }
+.cv-header-inner::before, .cv-header-inner::after { content: ''; position: absolute; top: 0; width: 14px; height: 14px; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.cv-header-inner::before { left: -14px; background: radial-gradient(circle at 0 100%, transparent 13.5px, #000 14px); }
+.cv-header-inner::after { right: -14px; background: radial-gradient(circle at 100% 100%, transparent 13.5px, #000 14px); }
+.cv-header::before { transition: opacity .3s; }
+.cv-notched { height: 48px; }
+.cv-notched::before { opacity: 0; }
+.cv-notched .cv-header-inner { width: min(var(--cv-notch-w), 100%); height: 48px; padding: 0 9px 0 20px; background: #000; box-shadow: 0 10px 30px rgb(0 0 0 / .28); color: #f5f5f7; }
+.cv-notched .cv-header-inner::before, .cv-notched .cv-header-inner::after { opacity: 1; }
+.cv-notched nav { gap: 14px; }
+.cv-notched .brand { font-size: 19px; color: #f5f5f7; }
+.cv-notched .brand-symbol { scale: .82; }
+:root .cv .cv-notched .brand-symbol { mix-blend-mode: screen; }
+:root .cv .cv-notched .brand-symbol img { filter: none; }
+.cv-notched .cv-nav-link, .cv-notched .cv-icon-link, .cv .cv-notched .theme-toggle { color: #a1a1a6; }
+.cv-notched .cv-nav-link:hover, .cv-notched .cv-icon-link:hover, .cv .cv-notched .theme-toggle:hover { color: #fff; }
+.cv .cv-notched .theme-toggle { width: 32px; height: 32px; background: transparent; }
+.cv .cv-notched .cv-nav-download { height: 32px; min-height: 32px; padding-inline: 15px; border: 0; border-radius: 999px; background: #f5f5f7; color: #000; }
+.cv .cv-notched .cv-nav-download:hover { background: #fff; }
 .cv-nav-link { color: var(--cv-muted); font: .8125rem var(--cv-mono); transition: color .2s; }
 .cv-nav-link:hover, .cv-icon-link:hover { color: var(--color-base-content); }
 .cv-icon-link { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 40px; color: var(--cv-muted); transition: color .2s; }
@@ -176,6 +199,9 @@
   .cv-footer { padding-inline: 28px; }
 }
 @media (max-width: 767px) {
+  .cv-header { --cv-notch-w: 300px; }
+  .cv-header-inner { height: 68px; }
+  .cv-header.cv-notched, .cv-notched .cv-header-inner { height: 46px; }
   .cv-header { height: 68px; padding-inline: 20px; }
   .cv-header nav { gap: 12px; }
   .cv-nav-link { display: none; }

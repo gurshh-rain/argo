@@ -68,21 +68,36 @@ function useBlurReveal() {
   }, [])
 }
 
+/** True once the page has scrolled past the top: the header then folds into a MacBook-style notch. */
+function useScrolledPast(offset = 24) {
+  const [past, setPast] = useState(false)
+  useEffect(() => {
+    const update = () => setPast(window.scrollY > offset)
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    return () => window.removeEventListener('scroll', update)
+  }, [offset])
+  return past
+}
+
 export function LandingPage() {
   useBlurReveal()
+  const notched = useScrolledPast()
   return (
     <div className="cv">
       <a className="skip-link" href="#main">Skip to content</a>
       <div className="cv-column">
-        <header className="du-navbar cv-header">
-          <Link to="/" aria-label="Argo home"><Brand /></Link>
-          <nav aria-label="Main navigation">
-            <a href="#features" className="cv-nav-link">Features</a>
-            <a href="#app" className="cv-nav-link">The app</a>
-            <a href={repository} target="_blank" rel="noreferrer" className="cv-icon-link" aria-label="Argo on GitHub"><GitHubIcon /></a>
-            <ThemeToggle />
-            <a href={dmgUrl} className="du-btn du-btn-sm cv-nav-download">Download</a>
-          </nav>
+        <header className={`du-navbar cv-header${notched ? ' cv-notched' : ''}`}>
+          <div className="cv-header-inner">
+            <Link to="/" aria-label="Argo home"><Brand /></Link>
+            <nav aria-label="Main navigation">
+              <a href="#features" className="cv-nav-link">Features</a>
+              <a href="#app" className="cv-nav-link">The app</a>
+              <a href={repository} target="_blank" rel="noreferrer" className="cv-icon-link" aria-label="Argo on GitHub"><GitHubIcon /></a>
+              <ThemeToggle />
+              <a href={dmgUrl} className="du-btn du-btn-sm cv-nav-download">Download</a>
+            </nav>
+          </div>
         </header>
 
         <main id="main">
