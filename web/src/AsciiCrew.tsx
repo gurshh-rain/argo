@@ -80,12 +80,19 @@ export function AsciiCrew({ className = '' }: { className?: string }) {
       for (let ring = 0; ring < 3; ring++) {
         const radiusX = columns * (.28 + ring * .075)
         const radiusY = rows * (.25 + ring * .07)
-        for (let step = 0; step < 100; step++) {
-          const angle = step / 100 * Math.PI * 2
-          const x = columns / 2 + Math.cos(angle) * radiusX
-          const y = rows / 2 + Math.sin(angle) * radiusY
+        // Solid hairline contours (no dotted lines), with a "+" every eighth of the way round.
+        context.globalAlpha = .35
+        context.strokeStyle = faint
+        context.lineWidth = 1
+        context.beginPath()
+        context.ellipse(width / 2, height / 2, radiusX * cellWidth, radiusY * cellHeight, 0, 0, Math.PI * 2)
+        context.stroke()
+        for (let step = 0; step < 8; step++) {
+          const angle = step / 8 * Math.PI * 2
+          const x = columns / 2 + Math.cos(angle) * radiusX - .5
+          const y = rows / 2 + Math.sin(angle) * radiusY - .5
           if (x > left - 2 && x < left + markWidth + 2 && y > top - 1 && y < top + markHeight + 1) continue
-          character(step % 8 === 0 ? '+' : '.', x, y, faint, .55)
+          character('+', x, y, faint, .55)
         }
       }
 
@@ -99,10 +106,17 @@ export function AsciiCrew({ className = '' }: { className?: string }) {
           x: route.x + (route.endX - route.x) * t + Math.sin(t * Math.PI) * route.bend,
           y: route.y + (route.endY - route.y) * t,
         })
-        for (let step = 0; step < 28; step++) {
-          const p = point(step / 27)
-          character(step % 4 === 0 ? ':' : '.', p.x, p.y, faint)
+        context.globalAlpha = .7
+        context.strokeStyle = faint
+        context.lineWidth = 1
+        context.beginPath()
+        for (let step = 0; step <= 48; step++) {
+          const p = point(step / 48)
+          const sx = (p.x + .5) * cellWidth, sy = (p.y + .5) * cellHeight
+          if (step) context.lineTo(sx, sy)
+          else context.moveTo(sx, sy)
         }
+        context.stroke()
         const packet = point((phase + routeIndex / 3) % 1)
         character('+', packet.x, packet.y, accent)
       })

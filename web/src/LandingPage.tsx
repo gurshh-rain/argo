@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { ClaudeLogo, CodexLogo, DevinLogo } from './AgentLogos'
+import { ClaudeLogo, CodexLogo, DevinLogo, OllamaLogo } from './AgentLogos'
 import { ProductMedia } from './ProductMedia'
 import { AsciiCrew } from './AsciiCrew'
 import { AsciiWordmark } from './AsciiArt'
@@ -104,7 +104,6 @@ export function LandingPage() {
           <section className="cv-hero cv-section">
             <div className="cv-hero-layout">
               <div className="cv-hero-copy">
-                <p className="cv-terminal-label"><span aria-hidden="true">~/</span> argo</p>
                 <h1>Your coding crew.<br /><span>Right at home on Mac.</span></h1>
                 <p className="cv-hero-description">Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac, and check in from anywhere.</p>
                 <div className="cv-hero-actions">
@@ -113,12 +112,21 @@ export function LandingPage() {
                 </div>
                 <p className="cv-requirements">macOS 14+<span aria-hidden="true">·</span>Apple silicon</p>
               </div>
-              <div className="cv-hero-art"><div className="cv-art-header" aria-hidden="true"><span>[ the crew ]</span><span>+ - +</span></div><AsciiCrew className="cv-ascii-hero" /></div>
+              <div className="cv-hero-art"><AsciiCrew className="cv-ascii-hero" /></div>
             </div>
             <div className="cv-film" id="film"><div className="cv-media-rail" aria-hidden="true"><span>~/argo/product-film</span><span>[ play ]</span></div><ProductMedia media={landingMedia.hero} /></div>
-            <div className="cv-compatible" aria-label="Works with Claude Code, Codex and Devin">
+            <div className="cv-compatible" aria-label="Works with Claude Code, Codex, Devin and Ollama">
               <p>Your favorite agents. One shared workspace.</p>
-              <div><span><ClaudeLogo />Claude Code</span><span><CodexLogo />Codex</span><span><DevinLogo />Devin</span></div>
+              <div className="cv-marquee" aria-hidden="true">
+                {/* Two identical halves; the track slides left by one half, so the loop is seamless. */}
+                <div className="cv-marquee-track">
+                  {[0, 1].map(half => <div className="cv-marquee-group" key={half}>
+                    {[0, 1].map(copy => <Fragment key={copy}>
+                      <span><ClaudeLogo />Claude Code</span><span><CodexLogo />Codex</span><span><DevinLogo />Devin</span><span><OllamaLogo />Ollama</span>
+                    </Fragment>)}
+                  </div>)}
+                </div>
+              </div>
             </div>
           </section>
 
@@ -176,9 +184,9 @@ export function LandingPage() {
           <div className="cv-footer-top">
             <div><Brand /><p>A home for your coding crew.</p></div>
             <div><h4>Product</h4><a href="#features">Features</a><a href="#film">Product film</a><a href={dmgUrl}>Download for Mac</a></div>
-            <div><h4>Resources</h4><a href={repository} target="_blank" rel="noreferrer">GitHub</a><a href={`${repository}#run-it`} target="_blank" rel="noreferrer">Setup guide</a><a href="https://wasp.sh/" target="_blank" rel="noreferrer">Built with Wasp</a></div>
+            <div><h4>Resources</h4><a href={repository} target="_blank" rel="noreferrer">GitHub</a><a href={`${repository}#run-it`} target="_blank" rel="noreferrer">Setup guide</a></div>
           </div>
-          <div className="cv-footer-bottom"><p className="cv-legal">© 2026 Argo</p><span>Built for the way you build.</span></div>
+          <div className="cv-footer-bottom"><p className="cv-legal">© 2026 Argo</p><span>Agentic orchestration.</span></div>
         </footer>
       </div>
     </div>

@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     static var dump: (() -> String)?
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
 
 @main
@@ -39,7 +39,7 @@ struct ArgoApp: App {
     @AppStorage(Appearance.key) private var appearance = Appearance.dark.rawValue
 
     var body: some Scene {
-        WindowGroup("Argo") {
+        WindowGroup("Argo", id: "main") {
             RootView().environmentObject(store).environmentObject(hub).environmentObject(sizes)
                 .task {
                     // hand waiting subtasks to the user's terminals
@@ -68,16 +68,16 @@ struct ArgoApp: App {
                     }
                 }
         }
-        .commands {
-            CommandMenu("Team") {
-                ForEach(Array(TeamHub.kinds.enumerated()), id: \.offset) { i, k in
-                    Button("New \(k.label) terminal") { hub.add(kind: k.id, project: store.project) }
-                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .shift])
-                }
-            }
-        }
+        .commands { ArgoCommands(store: store, hub: hub) }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1440, height: 900)
+
+        // the Argo icon in the menu bar; terminals keep running when the window is closed
+        MenuBarExtra {
+            MenuBarContent().environmentObject(store).environmentObject(hub)
+        } label: {
+            Image(systemName: MenuBarContent.needsCount(store, hub) > 0 ? "bell.badge.fill" : "point.3.connected.trianglepath.dotted")
+        }
     }
 }
 

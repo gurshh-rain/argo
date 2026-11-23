@@ -11,7 +11,7 @@ import {
 export default app({
   name: "argo",
   wasp: { version: "^0.26.1" },
-  title: "Argo — Your coding crew on Mac",
+  title: "argo - ai orchestration",
   head: [
     "<link rel='icon' type='image/png' href='/argo.png' />",
     "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover' />",
