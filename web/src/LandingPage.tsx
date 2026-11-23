@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { ClaudeLogo, CodexLogo, DevinLogo } from './AgentLogos'
 import { ProductMedia } from './ProductMedia'
 import { AsciiCrew } from './AsciiCrew'
 import { AsciiWordmark } from './AsciiArt'
@@ -46,7 +47,29 @@ function CopyCommand({ command }: { command: string }) {
   return <div className="cv-code"><span className="cv-code-prompt" aria-hidden="true">$</span><code>{command}</code><button className="du-btn du-btn-ghost du-btn-square" type="button" onClick={copy} aria-label={copied ? 'Command copied' : 'Copy command'}><Icon name={copied ? 'check' : 'code'} width="17" height="17" /></button><span className="sr-only" role="status">{copied ? 'Command copied to clipboard' : ''}</span></div>
 }
 
+// Blur-in on scroll: tag the main blocks, then clear the blur as each one enters the viewport.
+// The class is added from script, so without JS (or with reduced motion) everything just shows.
+const revealTargets = '.cv-hero-copy, .cv-hero-art, .cv-film, .cv-compatible, .cv-section > .cv-eyebrow, .cv-section > h2, .cv-section-description, .cv-card, .cv-preview-stage, .cv-footer'
+
+function useBlurReveal() {
+  useLayoutEffect(() => {
+    if (typeof IntersectionObserver === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const els = Array.from(document.querySelectorAll<HTMLElement>(revealTargets))
+    els.forEach((el) => {
+      el.classList.add('cv-reveal')
+      // stagger siblings (the feature cards) a little
+      el.style.setProperty('--reveal-delay', `${Math.min(Array.from(el.parentElement?.children ?? []).indexOf(el), 4) * 80}ms`)
+    })
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add('cv-in'); io.unobserve(e.target) }
+    }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' })
+    els.forEach((el) => io.observe(el))
+    return () => { io.disconnect(); els.forEach((el) => el.classList.remove('cv-reveal', 'cv-in')) }
+  }, [])
+}
+
 export function LandingPage() {
+  useBlurReveal()
   return (
     <div className="cv">
       <a className="skip-link" href="#main">Skip to content</a>
@@ -80,7 +103,7 @@ export function LandingPage() {
             <div className="cv-film" id="film"><div className="cv-media-rail" aria-hidden="true"><span>~/argo/product-film</span><span>[ play ]</span></div><ProductMedia media={landingMedia.hero} /></div>
             <div className="cv-compatible" aria-label="Works with Claude Code, Codex and Devin">
               <p>Your favorite agents. One shared workspace.</p>
-              <div><span><Icon name="spark" width="19" height="19" />Claude Code</span><span><Icon name="code" width="20" height="20" />Codex</span><span><Icon name="terminal" width="19" height="19" />Devin</span></div>
+              <div><span><ClaudeLogo />Claude Code</span><span><CodexLogo />Codex</span><span><DevinLogo />Devin</span></div>
             </div>
           </section>
 
