@@ -8,12 +8,44 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var s: Settings?
     @State private var checks = ""
+    @AppStorage(Appearance.key) private var appearance = Appearance.dark.rawValue
+    @StateObject private var updater = Updater()
+
+    @ViewBuilder var updateStatus: some View {
+        switch updater.status {
+        case .idle: Text("Checks the latest release on GitHub.").foregroundStyle(.secondary)
+        case .checking: Text("Checking…").foregroundStyle(.secondary)
+        case .upToDate(let v): Text("You're up to date (\(v)).").foregroundStyle(.secondary)
+        case .available(let v, _): Text("Version \(v) is available.").foregroundStyle(Theme.ring)
+        case .failed(let m): Text(m).foregroundStyle(Theme.amber).textSelection(.enabled)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Model controls").font(.title3.bold())
+            Text("Settings").font(.title3.bold())
             if let binding = Binding($s) {
                 Form {
+                    Section("Appearance") {
+                        Picker("Theme", selection: $appearance) {
+                            ForEach(Appearance.allCases) { Text($0.label).tag($0.rawValue) }
+                        }.pickerStyle(.segmented)
+                    }
+                    Section("Updates") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Argo \(updater.installed)")
+                                updateStatus.font(.caption)
+                            }
+                            Spacer()
+                            if case .available(_, let url) = updater.status {
+                                Button("Download") { NSWorkspace.shared.open(url) }.buttonStyle(ArgoButton(kind: .primary))
+                            }
+                            Button("Check for Updates") { updater.check() }.buttonStyle(ArgoButton())
+                                .disabled(updater.status == .checking)
+                        }
+                    }
+                    Section("Model controls") {
                     Picker("Default CLI", selection: binding.defaultAgent) {
                         Text("Auto — the orchestrator picks per subtask").tag("auto")
                         ForEach(store.installedAgents) { Text($0.label).tag($0.id) }
@@ -30,12 +62,6 @@ struct SettingsSheet: View {
                     Stepper("Parallel agents: \(binding.wrappedValue.maxParallel)", value: binding.maxParallel, in: 1...8)
                     Toggle("Run plans without waiting for my approval", isOn: binding.autoApprove)
                     TextField("Checks (one command per line; empty = detect)", text: $checks, axis: .vertical).lineLimit(2...4)
-                    Section("Phone calls") {
-                        Toggle("Call me when an agent needs attention", isOn: binding.callOnAttention)
-                        TextField("My phone number (E.164)", text: binding.phoneNumber)
-                        let i = store.state?.integrations
-                        Text(i?.phoneCalls == true ? "ElevenLabs + Twilio calling is configured." : "Calling is off: set ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID and ELEVENLABS_PHONE_NUMBER_ID in ~/.argo/.env and restart.")
-                            .font(.caption).foregroundStyle(i?.phoneCalls == true ? Theme.green : Theme.amber)
                     }
                 }.formStyle(.grouped).scrollContentBackground(.hidden)
             }
@@ -48,12 +74,12 @@ struct SettingsSheet: View {
                     var models: [String: String] = [:]
                     for a in store.installedAgents { if let m = s.models[a.id] { models[a.id] = m } }
                     store.saveSettings(["defaultAgent": s.defaultAgent, "models": models, "reasoning": s.reasoning, "maxParallel": s.maxParallel, "autoApprove": s.autoApprove,
-                                        "callOnAttention": s.callOnAttention, "phoneNumber": s.phoneNumber, "checks": checks.split(separator: "\n").map(String.init)])
+                                        "checks": checks.split(separator: "\n").map(String.init)])
                     dismiss()
                 }.buttonStyle(ArgoButton(kind: .primary, large: true))
             }
         }
-        .padding(20).frame(width: 560, height: 600)
+        .padding(20).frame(width: 580, height: 680)
         .onAppear { s = store.state?.settings; checks = s?.checks.joined(separator: "\n") ?? "" }
     }
 }

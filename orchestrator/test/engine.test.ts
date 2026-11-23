@@ -58,11 +58,11 @@ test('a follow-up becomes a new subtask on a finished run', async () => {
   const project = repo()
   const run = await engine.startRun(project, 'make three files', { autoApprove: true })
   await until(() => run.status === 'done')
-  const r = engine.instruct(run, 'also MOCK_WRITE d.txt', 'phone-voice')
+  const r = engine.instruct(run, 'also MOCK_WRITE d.txt', 'phone')
   assert.equal(r.action, 'queued')
   await until(() => run.status === 'done')
   assert.ok(run.report!.changedFiles.includes('d.txt'))
-  assert.equal(run.followups[0].source, 'phone-voice')
+  assert.equal(run.followups[0].source, 'phone')
 })
 
 test('a failing agent raises attention and a spoken instruction retries it', async () => {
@@ -75,7 +75,7 @@ test('a failing agent raises attention and a spoken instruction retries it', asy
   const a = attention.find((x) => x.runId === run.id && x.kind === 'error')
   assert.ok(a && a.taskId === 't1')
   assert.equal(run.tasks[2].status, 'pending')
-  assert.equal(engine.instruct(run, 'try again please', 'phone-call').action, 'retried')
+  assert.equal(engine.instruct(run, 'try again please', 'phone').action, 'retried')
   assert.equal(run.tasks[0].difficulty, 'medium', 'a failed subtask is escalated one level for the retry')
   await until(() => run.status === 'done')
   assert.ok(runs.has(run.id) && loadConfig().projects.includes(project))

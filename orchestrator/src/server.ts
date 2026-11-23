@@ -8,7 +8,7 @@ import { runs, attention, subscribe, readLog, save } from './store.ts'
 import { agents } from './agents.ts'
 import * as engine from './engine.ts'
 import * as g from './git.ts'
-import { summary, transcribe, speak, call, describe } from './voice.ts'
+import { summary, describe } from './status.ts'
 import type { Run, Settings } from './types.ts'
 
 // Identifies this exact orchestrator code. The Mac app hashes its bundled copy the same way and replaces
@@ -79,10 +79,8 @@ function updateSettings(patch: Partial<Settings>) {
   }
   if (patch.models) for (const [k, v] of Object.entries(patch.models)) if (ids.includes(k)) s.models[k] = String(v)
   if (patch.autoApprove !== undefined) s.autoApprove = !!patch.autoApprove
-  if (patch.callOnAttention !== undefined) s.callOnAttention = !!patch.callOnAttention
   if (patch.maxParallel !== undefined) s.maxParallel = Math.max(1, Math.min(8, Number(patch.maxParallel) || 3))
   if (patch.checks !== undefined) s.checks = (patch.checks as string[]).map(String).filter(Boolean)
-  if (patch.phoneNumber !== undefined) s.phoneNumber = String(patch.phoneNumber).trim()
   if (patch.publicUrl !== undefined) s.publicUrl = String(patch.publicUrl).trim().replace(/\/$/, '')
   saveConfig()
   return s
@@ -171,20 +169,6 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
     const r = runs.get(a.runId)
     if (r) save(r)
     return { ok: true }
-  }
-  if (m === 'POST' && at('attention', null, 'call')) {
-    const a = attention.find((x) => x.id === p[1])
-    if (!a) throw new HttpError(404, 'No such notification')
-    return { callSid: await call(a) }
-  }
-  if (m === 'POST' && at('voice', 'stt')) {
-    const b = await body(req)
-    return { text: await transcribe(Buffer.from(String(b.audio || ''), 'base64'), String(b.mime || 'audio/webm')) }
-  }
-  if (m === 'POST' && at('voice', 'tts')) {
-    const b = await body(req)
-    const text = String(b.text || summary(b.run))
-    return { text, audio: (await speak(text)).toString('base64'), mime: 'audio/mpeg' }
   }
   throw new HttpError(404, 'Not found')
 }

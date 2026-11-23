@@ -192,13 +192,9 @@ ${renderMemory(run)}
 ## Your subtask: ${t.id} — ${t.title}
 ${t.description}
 ${extra ? `\n## New instruction from the user\n${extra}\n` : ''}
-${loadConfig().settings.callOnAttention ? `## Ask the developer by phone
-When you need the developer's answer to continue, read the call-user skill at ${JSON.stringify(join(import.meta.dirname, 'skills', 'call-user', 'SKILL.md'))}.
-Run the existing phone script described there and use its transcript as the answer in this task. The skill's temporary files and configured phone backend may live outside this worktree; keep project edits inside your assigned scope.
-` : ''}
 ## Rules
 ${run.isolated
-    ? `- Work only inside the current directory. It is your own git worktree (branch ${t.branch}), already containing the merged work of the subtasks you depend on.${loadConfig().settings.callOnAttention ? ' The phone skill may use its existing backend and private temporary files outside this directory without changing backend code or credentials.' : ''}
+    ? `- Work only inside the current directory. It is your own git worktree (branch ${t.branch}), already containing the merged work of the subtasks you depend on.
 - Stay within your subtask's files so your changes merge cleanly with the others.
 - Do not commit, push, or switch branches. The orchestrator commits and merges your work when you finish.
 - If you make a decision another agent must know about (an interface, a file name, a convention), append one bullet per decision to ${notes}
@@ -210,7 +206,7 @@ ${run.isolated
 - Your final message is your deliverable: give the complete result of your subtask, then note anything you could not establish.`}${resultFile ? `
 
 ## You are in a terminal the user is watching
-${run.isolated ? `- Your working directory for this subtask is ${t.worktree} (not the directory this session started in). cd there for every command and only touch files inside it.${loadConfig().settings.callOnAttention ? ' The phone skill may use its existing backend and private temporary files outside this directory; also write the required result file below.' : ''}\n` : ''}- When you have finished, write your complete final message to ${resultFile}. Writing that file is how the orchestrator learns you are done, so do it last, and do it even if you could not finish (say why in it).` : ''}`
+${run.isolated ? `- Your working directory for this subtask is ${t.worktree} (not the directory this session started in). cd there for every command and only touch files inside it.\n` : ''}- When you have finished, write your complete final message to ${resultFile}. Writing that file is how the orchestrator learns you are done, so do it last, and do it even if you could not finish (say why in it).` : ''}`
 }
 
 async function execTask(run: Run, t: Task, extra?: { instruction?: string; escalate?: boolean }) {
@@ -230,13 +226,10 @@ async function execTask(run: Run, t: Task, extra?: { instruction?: string; escal
   out(`── ${label(a)} · reasoning ${a.reasoning}${t.override ? ' · manual override' : ''} ${t.branch ? ' · ' + t.branch : ''}`)
   const ac = new AbortController()
   aborts.set(key(run, t.id), ac)
-  const phoneQuestions = loadConfig().settings.callOnAttention
-  const phoneBackend = process.env.ARGO_PHONE_DEMO_DIR || '/Users/gz/Documents/codevisor-call-demo'
   const background = () => runAgent({
     ...a, cwd: t.worktree!, prompt: workPrompt(run, t, a, extra?.instruction), escalate: extra?.escalate,
     resume: extra?.instruction && a.agent === 'claude' ? t.sessionId : undefined,
-    addDirs: [dir(run.project, 'notes'), ...(phoneQuestions && existsSync(phoneBackend) ? [phoneBackend] : [])],
-    phoneQuestions, signal: ac.signal, onLine: out,
+    addDirs: [dir(run.project, 'notes')], signal: ac.signal, onLine: out,
     stuckMs: 240_000, onStuck: () => raise(run, 'stuck', 'No output for four minutes.', t.id),
   })
   // Work that other subtasks build on goes to a terminal the user has open, so they can watch and steer it.
@@ -437,7 +430,7 @@ async function verify(run: Run) {
   save(run)
 }
 
-// A follow-up from the Mac app, the phone, or a phone call.
+// A follow-up from the Mac app or the phone.
 export function instruct(run: Run, text: string, source: string): { action: string; taskId?: string } {
   text = text.trim()
   if (!text) throw new Error('Empty instruction')

@@ -108,12 +108,10 @@ struct Settings: Codable, Equatable {
     var autoApprove: Bool
     var maxParallel: Int
     var checks: [String]
-    var callOnAttention: Bool
-    var phoneNumber: String
     var publicUrl: String
 }
 
-struct Integrations: Codable, Equatable { let elevenlabs: Bool; let phoneCalls: Bool; let maritime: Bool }
+struct Integrations: Codable, Equatable { let maritime: Bool }
 
 struct AppState: Codable {
     let agents: [AgentSpec]

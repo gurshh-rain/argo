@@ -36,6 +36,7 @@ struct ArgoApp: App {
     @StateObject private var store = Store()
     @StateObject private var hub = TeamHub()
     @StateObject private var sizes = SplitSizes()
+    @AppStorage(Appearance.key) private var appearance = Appearance.dark.rawValue
 
     var body: some Scene {
         WindowGroup("Argo") {
@@ -48,9 +49,14 @@ struct ArgoApp: App {
                     }
                 }
                 .frame(minWidth: 1100, minHeight: 680)
-                .preferredColorScheme(.dark).tint(Theme.ring)
+                .tint(Theme.ring)
+                .onChange(of: appearance, initial: true) { _, v in
+                    (Appearance(rawValue: v) ?? .dark).apply()
+                    hub.restyleTerminals()
+                }
                 .onAppear {
                     store.start()
+                    hub.watchAppearance()
                     AppDelegate.dump = { [hub] in hub.dumpText() }
                     // `ARGO_DEMO_TEAM=1` opens a few terminals at launch (for headless UI checks).
                     if ProcessInfo.processInfo.environment["ARGO_DEMO_TEAM"] != nil {

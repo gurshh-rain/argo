@@ -1,4 +1,4 @@
-import { action, api, app, page, query, route } from "@wasp.sh/spec";
+import { action, app, page, query, route } from "@wasp.sh/spec";
 import { LandingPage } from "./src/LandingPage" with { type: "ref" };
 import { ConsolePage } from "./src/ConsolePage" with { type: "ref" };
 import {
@@ -6,10 +6,7 @@ import {
   startTask,
   sendFollowup,
   approveRun,
-  transcribeAudio,
-  speakStatus,
 } from "./src/operations" with { type: "ref" };
-import { voiceStatusHook, voiceInstructHook } from "./src/hooks" with { type: "ref" };
 
 export default app({
   name: "argo",
@@ -29,11 +26,5 @@ export default app({
     action(startTask, { entities: ["VoiceCommand"] }),
     action(sendFollowup, { entities: ["VoiceCommand"] }),
     action(approveRun),
-    action(transcribeAudio),
-    action(speakStatus),
-
-    // Server tools the ElevenLabs phone agent calls during a call.
-    api("POST", "/hooks/voice/status", voiceStatusHook),
-    api("POST", "/hooks/voice/instruct", voiceInstructHook),
   ],
 });

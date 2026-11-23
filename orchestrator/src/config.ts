@@ -25,8 +25,6 @@ const defaultSettings: Settings = {
   autoApprove: false,
   maxParallel: 3,
   checks: [],
-  callOnAttention: true,
-  phoneNumber: '',
   publicUrl: '',
 }
 
@@ -70,8 +68,6 @@ export function secret(name: string): string {
 
 export function integrations() {
   return {
-    elevenlabs: !!secret('ELEVENLABS_API_KEY'),
-    phoneCalls: !!(secret('ELEVENLABS_API_KEY') && secret('ELEVENLABS_AGENT_ID') && secret('ELEVENLABS_PHONE_NUMBER_ID')),
     maritime: !!secret('MARITIME_API_KEY'),
   }
 }

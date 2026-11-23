@@ -258,9 +258,6 @@ final class Store: ObservableObject {
     func dismiss(_ a: AttentionItem) {
         act { let _: Ignored = try await self.daemon.request("POST", "attention/\(a.id)/resolve") }
     }
-    func callMe(_ a: AttentionItem) {
-        act { let _: Ignored = try await self.daemon.request("POST", "attention/\(a.id)/call") }
-    }
     func saveSettings(_ patch: [String: Any]) {
         act { let _: Ignored = try await self.daemon.request("PUT", "settings", body: patch) }
     }

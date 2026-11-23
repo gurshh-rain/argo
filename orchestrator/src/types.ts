@@ -110,7 +110,5 @@ export interface Settings {
   autoApprove: boolean
   maxParallel: number
   checks: string[]
-  callOnAttention: boolean
-  phoneNumber: string
   publicUrl: string
 }

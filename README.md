@@ -1,13 +1,19 @@
 # Argo
 
-Your AI coding team, controlled by voice. Give it one high-level task; it plans the work, routes each
+Your AI coding team on Mac. Give it one high-level task; it plans the work, routes each
 subtask to the coding CLI and model that suits it, runs independent subtasks in parallel in isolated
-git worktrees, merges, checks, reviews and reports. Check on it, or redirect it, by speaking from your phone.
+git worktrees, merges, checks, reviews and reports. Check on it, or redirect it, from your phone's browser.
+
+## Demo
+
+[![Watch the Argo demo (1:54)](web/public/media/app/app.jpg)](web/public/media/argo.mp4)
+
+▶ [Watch the demo video](web/public/media/argo.mp4) (1 min 54 s, the same film shown on the website)
 
 ```
 mac/            Native macOS app (SwiftUI, cmux-style: vertical run tabs, split agent panes, notification rings)
-orchestrator/   Local daemon (Node, zero dependencies): planning, routing, worktrees, shared record, voice, calls
-web/            Wasp app: landing page + authenticated phone console (voice in, transcript confirm, spoken status)
+orchestrator/   Local daemon (Node, zero dependencies): planning, routing, worktrees, shared record
+web/            Wasp app: landing page + phone console (start tasks, send follow-ups, approve plans)
 ```
 
 ## Run it
@@ -21,7 +27,8 @@ mac/build.sh && open mac/build/Argo.app      # starts the orchestrator itself
 Choose a project folder (a git repository), type a task, review the plan, click any agent label to
 override the agent, model or reasoning level for that subtask, then **Approve & run**.
 
-For voice input in the native Mac app, put `ELEVENLABS_API_KEY` in `~/.argo/.env` and restart the background service. Click the microphone beside the task input, allow microphone access, speak, then click stop. ElevenLabs fills the recognized text into your existing draft for review; use the normal send button when ready. Cancel discards the recording. Recordings are limited to two minutes and temporary audio is removed after capture. No separate dictation app is needed.
+**Settings** also has the appearance (System, Light or Dark) and **Check for Updates**, which compares the
+installed version with the latest GitHub release and offers the DMG for this Mac when a newer one exists.
 
 Phone:
 
@@ -59,40 +66,9 @@ control your agents, so keep it on localhost or a private network (Tailscale).
   whether plans need approval. Per-subtask override from the pane header. Every pane, the record and
   the phone show which agent and model did the work and whether it was an override.
 - **Attention.** A failed agent, a blocked command, four minutes of silence, a merge conflict or a
-  finished run raises a notification (blue ring and macOS notification). Agents ask phone questions through the call-user skill.
+  finished run raises a notification (blue ring and macOS notification).
   A follow-up while a subtask is blocked goes to that subtask ("approve" lets a blocked command run);
   otherwise it becomes a new subtask on the run.
-- **Voice.** The phone records audio, ElevenLabs Scribe transcribes it, and the transcript is shown
-  and editable before it is sent as a new task or a follow-up. **Speak status** reads a summary with
-  ElevenLabs TTS. Without an ElevenLabs key the phone's built-in speech recognition and voice are used.
-
-## Ask the developer by phone
-
-For the hackathon demo, coding agents use the [call-user skill](orchestrator/src/skills/call-user/SKILL.md): write one question, run the existing local phone script, read `TRANSCRIPT`, and continue the same task. Argo includes the skill path in agent work prompts when **Call me when an agent needs attention** is enabled.
-
-The existing phone backend is installed at `/Users/gz/Documents/codevisor-call-demo` on Ricardo's Mac. Set `ARGO_PHONE_DEMO_DIR` before launching Argo to use another installation. This demo needs that backend and its configured phone account; cloning Argo alone does not install them. See [usage](docs/phone-call-usage-plan.md).
-
-When phone questions are enabled, background coding workers receive access to that backend's runtime directory. Background Codex workers also receive outbound network access for the call while keeping the workspace sandbox. Interactive terminals keep their existing CLI permissions; use Run in background if those permissions block the phone helper. Turning the setting off omits these phone additions. Attention notifications no longer automatically initiate a second ElevenLabs call.
-
-## Phone calls with ElevenLabs
-
-Put keys in `~/.argo/.env` (see `orchestrator/.env.example`) and restart the app.
-
-Outbound calls are placed by ElevenLabs Agents (`POST /v1/convai/twilio/outbound-call`), which speak
-to you and relay your decision back to the team. Create the agent in the ElevenLabs dashboard:
-
-1. Import your phone number under Phone Numbers (ElevenLabs connects it through Twilio); put its id in `ELEVENLABS_PHONE_NUMBER_ID`.
-2. Create an agent; put its id in `ELEVENLABS_AGENT_ID`. First message: `{{event_message}}`.
-   System prompt: it is the developer's coding-team dispatcher; `{{status_summary}}` is the current
-   state; it should relay the developer's decision with the `instruct` tool and confirm what it sent.
-3. Add two webhook tools, each sending header `x-argo-secret: <ARGO_HOOK_SECRET from web/.env.server>`:
-   - `get_status` → `POST <phone address>/_server/hooks/voice/status`, body `{ "run_id": "{{run_id}}" }`
-   - `instruct` → `POST <phone address>/_server/hooks/voice/instruct`, body `{ "run_id": "{{run_id}}", "instruction": "<what the developer said>" }`
-4. In the Mac app's Settings, enter your phone number and enable calls.
-
-## Direct phone plan
-
-See the [phone skill usage guide](docs/phone-call-usage-plan.md) for the simple direct demo. The skill runs the existing phone program and returns text to its calling agent; it does not require a new provider API or callback routing inside Argo.
 
 ## Tests
 
@@ -104,9 +80,13 @@ cd web && wasp compile
 ## Packaging a release
 
 ```sh
-mac/package.sh 0.1.0      # builds, then writes mac/dist/Argo-0.1.0-arm64.zip, .dmg and SHA256SUMS.txt
+mac/package.sh 0.1.3      # builds, then writes mac/dist/Argo-0.1.3-arm64.zip, .dmg and SHA256SUMS.txt
 ```
 
 The app is ad-hoc signed, not notarized, so on another Mac the first launch needs right-click → Open
 (or `xattr -dr com.apple.quarantine /Applications/Argo.app`). It is built for the architecture of the
 Mac that packages it, and needs Node 24+ and at least one coding CLI on the user's PATH.
+
+Publish it as a GitHub release on the tag `v<version>` with the DMG attached under the name `package.sh`
+gives it: **Check for Updates** in the app reads the latest release, and the website's download link
+expects that file name.

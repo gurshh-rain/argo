@@ -140,7 +140,6 @@ struct TaskPane: View {
                         Spacer()
                         if a.kind == "permission" { Button("Approve") { store.instruct("approve") }.buttonStyle(ArgoButton(kind: .primary)) }
                         Button("Retry") { store.retry(task.id) }
-                        if store.state?.integrations.phoneCalls == true { Button("Call me") { store.callMe(a) } }
                         Button("Dismiss") { store.dismiss(a) }
                     }
                     .buttonStyle(ArgoButton()).padding(.horizontal, 8).padding(.vertical, 6).background(Theme.rowSelected)

@@ -47,6 +47,25 @@ indirect enum Layout: Equatable {
 /// Owns the terminal views so a session survives while the user switches tabs.
 @MainActor
 final class TeamHub: ObservableObject {
+    private var appearanceWatch: NSKeyValueObservation?
+
+    /// Terminal colors follow the app's appearance (Settings → Appearance, or the system's when set to System).
+    static func style(_ v: LocalProcessTerminalView) {
+        let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        v.nativeBackgroundColor = dark ? NSColor(srgbRed: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1) : NSColor(srgbRed: 0xf7 / 255.0, green: 0xf7 / 255.0, blue: 0xf7 / 255.0, alpha: 1)
+        v.nativeForegroundColor = NSColor(white: dark ? 0.92 : 0.12, alpha: 1)
+        v.caretColor = dark ? .white : .black
+        v.needsDisplay = true
+    }
+    func restyleTerminals() { for v in views.values { Self.style(v) } }
+    /// Restyle the terminals whenever the effective appearance changes, including a system switch while set to System.
+    func watchAppearance() {
+        guard appearanceWatch == nil else { return }
+        appearanceWatch = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.restyleTerminals() }
+        }
+    }
+
     @Published var members: [Member] = []
     @Published var focused: UUID?
     /// Workspaces that have already been given their first terminal.
@@ -171,9 +190,7 @@ final class TeamHub: ObservableObject {
         v.processDelegate = d
         delegates[m.id] = d
         v.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        v.nativeBackgroundColor = NSColor(srgbRed: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
-        v.nativeForegroundColor = NSColor(white: 0.92, alpha: 1)
-        v.caretColor = .white
+        Self.style(v)
         views[m.id] = v
         let argo = (home as NSString).appendingPathComponent(".argo")
         var env = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)

@@ -125,7 +125,6 @@ struct Composer: View {
     @EnvironmentObject var hub: TeamHub
     @State private var text = ""
     @State private var forceNew = false
-    @StateObject private var voice = VoiceInput()
     var followup: Bool { !forceNew && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
 
     var body: some View {
@@ -150,54 +149,29 @@ struct Composer: View {
                     Picker("", selection: $forceNew) {
                         Text("Follow-up").tag(false)
                         Text("New task").tag(true)
-                    }.pickerStyle(.segmented).fixedSize().labelsHidden().disabled(voice.busy)
+                    }.pickerStyle(.segmented).fixedSize().labelsHidden()
                 }
                 Text("❯").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.ring)
                 TextField(followup ? "Tell the agents what to do next…" : (store.folder.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.folder as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(Theme.text).lineLimit(1...4)
                     .onSubmit(send)
-                Button {
-                    voice.toggle(daemon: store.daemon, configured: store.state?.integrations.elevenlabs == true) { transcript in
-                        text += (text.isEmpty || text.last?.isWhitespace == true ? "" : " ") + transcript
-                    }
-                } label: {
-                    if voice.phase == .permission || voice.phase == .transcribing {
-                        ProgressView().controlSize(.small).frame(width: 20, height: 20)
-                    } else {
-                        Image(systemName: voice.phase == .recording ? "stop.fill" : "mic.fill").font(.system(size: 14)).frame(width: 20, height: 20)
-                    }
-                }
-                .buttonStyle(IconButton()).foregroundStyle(voice.phase == .recording ? Color.red : Theme.dim)
-                .disabled(voice.phase == .permission || voice.phase == .transcribing)
-                .help(voice.phase == .recording ? "Stop recording and transcribe" : "Dictate with ElevenLabs")
-                .accessibilityLabel(voice.phase == .recording ? "Stop voice recording" : "Start voice input")
                 Button(action: send) {
                     Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 26, height: 26)
                         .background(text.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.chip : Theme.ring, in: Circle())
                 }
                     .buttonStyle(.plain).help("Send (↩)")
-                    .disabled(voice.busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            if voice.busy {
-                HStack {
-                    Text(voice.phase == .recording ? "Recording, up to two minutes. Click stop to transcribe." : voice.phase == .permission ? "Waiting for microphone permission…" : "Transcribing with ElevenLabs…")
-                    Button("Cancel") { voice.cancel() }.buttonStyle(ArgoButton())
-                }.font(.caption).foregroundStyle(Theme.dim)
-            }
-            if let error = voice.error { Text(error).font(.caption).foregroundStyle(Theme.amber).textSelection(.enabled) }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(Theme.bg)
         .overlay(alignment: .top) { HLine() }
-        .onDisappear { voice.cancel() }
-        .onChange(of: store.project) { _, _ in voice.cancel() }
-        .onChange(of: store.selectedRun) { _, _ in voice.cancel() }
     }
 
     func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !voice.busy, !t.isEmpty else { return }
+        guard !t.isEmpty else { return }
         if followup { store.instruct(t) } else { store.newRun(t, terminals: hub.hasCLI(in: store.project)); forceNew = false }
         text = ""
     }

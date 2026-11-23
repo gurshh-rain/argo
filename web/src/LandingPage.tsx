@@ -16,8 +16,8 @@ const features: Feature[] = [
   { icon: 'layers', title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4', shot: '/media/app/workspaces.jpg', alt: 'Argo sidebar with workspaces, and the Worktree and Add member controls', focus: 'left top' },
   { icon: 'swap', title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
   { icon: 'shield', title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2', shot: '/media/app/report.jpg', alt: 'The orchestrator report listing what is complete and what needs attention', focus: 'left top' },
-  { icon: 'mic', title: 'Control it by voice.', description: 'Speak a task or a follow-up, confirm the transcript, and hear a spoken status.', span: 'cv-span-2', shot: '/media/app/composer.jpg', alt: 'The composer with Follow-up and New task modes and a microphone button', focus: 'left bottom' },
-  { icon: 'phone', title: 'They call you.', description: 'A blocked agent, a failure or a finished run rings your phone. Answer, and it reaches the right agent.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin, with the Phone button', focus: 'left center' },
+  { icon: 'terminal', title: 'Steer it as it runs.', description: 'Send a follow-up to a running task, or start a new one, from the same composer.', span: 'cv-span-2', shot: '/media/app/composer.jpg', alt: 'The task composer', focus: 'left bottom' },
+  { icon: 'activity', title: 'Know when they need you.', description: 'A blocked agent, a failure or a finished run raises a notification ring and a macOS notification.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin', focus: 'left center' },
 ]
 
 function MacIcon() {
@@ -53,7 +53,7 @@ export function LandingPage() {
         <main id="main">
           <section className="cv-hero cv-section">
             <h1>Your coding crew.<br />Right at home on Mac.</h1>
-            <p>Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac, and check in from your phone by voice.</p>
+            <p>Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac, and check in from anywhere.</p>
             <div className="cv-hero-actions"><a href={dmgUrl} className="cv-pill cv-pill-lg">Download for Mac</a></div>
             <div className="cv-film" id="film"><ProductMedia media={landingMedia.hero} /></div>
           </section>

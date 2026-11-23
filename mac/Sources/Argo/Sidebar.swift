@@ -143,7 +143,7 @@ struct TeamSection: View {
                     let on = hub.focused == m.id
                     HStack(spacing: 6) {
                         Circle().fill(Theme.agent(m.kind)).frame(width: 7, height: 7)
-                        Text(m.name).font(.system(size: 12.5, weight: on ? .bold : .medium)).foregroundStyle(on ? .white : Theme.text)
+                        Text(m.name).font(.system(size: 12.5, weight: on ? .bold : .medium)).foregroundStyle(on ? Theme.green : Theme.text)
                         Spacer()
                         if hub.ringing.contains(m.id) { Image(systemName: "bell.fill").font(.system(size: 9)).foregroundStyle(Theme.ring) }
                         if hub.exited.contains(m.id) { Text("exited").font(.system(size: 9.5)).foregroundStyle(Theme.dim) }
