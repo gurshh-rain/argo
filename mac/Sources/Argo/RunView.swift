@@ -136,7 +136,7 @@ struct Composer: View {
                     Image(systemName: "checklist").foregroundStyle(Theme.ring)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Plan ready: \(run.tasks.count) subtask\(run.tasks.count == 1 ? "" : "s")").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.text)
-                        Text("Check who does what above. Click an agent label to change it.").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
+                        Text("Each subtask and its agent is listed above. Click one to open it and change its agent.").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
                     }
                     Spacer()
                     Button("Cancel") { store.runAction("cancel") }.buttonStyle(ArgoButton(large: true))

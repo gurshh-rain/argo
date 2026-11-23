@@ -20,6 +20,8 @@ final class Store: ObservableObject {
     @Published var confirm: Confirm?
     /// Run panes the user closed, as "<run>/<pane>".
     @Published var closedPanes = Set<String>()
+    /// Subtask panes the user opened, as "<run>/<task>". A subtask gets no pane until asked for.
+    @Published var openPanes = Set<String>()
     /// Folders the user has opened. "" is the no-project workspace (research).
     @Published var workspaces: [String] = UserDefaults.standard.stringArray(forKey: "workspaces") ?? []
     private var userClearedProject = false

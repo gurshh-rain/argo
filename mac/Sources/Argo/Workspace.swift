@@ -30,10 +30,15 @@ struct WorkspaceView: View {
                 RunStrip(runs: runs)
                 HLine()
             }
+            if let run = store.run, !run.tasks.isEmpty {
+                SubtaskBar(run: run)
+                HLine()
+            }
             if let run = store.run { WaitingBanner(run: run) }
             // Everything below is one resizable stack: the terminals, then the run's own panes.
-            // Subtasks handed to a terminal are watched there, so they get no pane of their own.
-            let panes: [TaskItem] = (store.run?.tasks ?? []).filter { !$0.inTerminal && !store.closedPanes.contains("\(store.selectedRun ?? "")/\($0.id)") }
+            // Starting a task opens no subtask panes; each one opens only when its chip is clicked.
+            // Subtasks handed to a terminal are watched there, so they never get a pane of their own.
+            let panes: [TaskItem] = (store.run?.tasks ?? []).filter { !$0.inTerminal && store.openPanes.contains("\(store.selectedRun ?? "")/\($0.id)") }
             let showOrch = store.run != nil && !store.closedPanes.contains("\(store.selectedRun ?? "")/orchestrator")
             let hasTerminals = hub.layouts[ws] != nil && !terminals.isEmpty
             let keys = (hasTerminals ? ["terminals:\(ws)"] : []) + panes.map { "pane:\(ws):\($0.id)" } + (showOrch ? ["pane:\(ws):orchestrator"] : [])
@@ -75,6 +80,48 @@ struct WorkspaceView: View {
               !hub.opened.contains(ws), hub.members(in: ws).isEmpty else { return }
         hub.opened.insert(ws)
         hub.add(kind: "shell", project: ws)
+    }
+}
+
+/// The run's subtasks as a compact row: status, who is doing it, and on which model.
+/// Nothing opens by itself; click a chip to open or close that subtask's output pane.
+struct SubtaskBar: View {
+    @EnvironmentObject var store: Store
+    let run: Run
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(run.tasks) { t in
+                    let key = "\(run.id)/\(t.id)"
+                    let open = store.openPanes.contains(key)
+                    let needs = !store.attention(for: run.id, task: t.id).isEmpty || t.status == "failed"
+                    let a = t.effective
+                    let who = t.inTerminal ? (t.terminal ?? "waiting for a terminal") : "\(store.agent(a.agent)?.label ?? "?") · \((a.model ?? "").isEmpty ? "cli default" : a.model!)"
+                    Button {
+                        if t.inTerminal { return }
+                        if open { store.openPanes.remove(key) } else { store.openPanes.insert(key); store.closedPanes.remove(key) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            StatusDot(status: t.status)
+                            Text("\(t.id)").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.dim)
+                            Text(t.title).font(.system(size: 11.5)).foregroundStyle(Theme.text).lineLimit(1).frame(maxWidth: 190, alignment: .leading).fixedSize()
+                            Text(who).font(.system(size: 10.5)).foregroundStyle(Theme.agent(a.agent)).lineLimit(1)
+                            if !t.inTerminal { Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.dim) }
+                        }
+                        .padding(.horizontal, 8).frame(height: 22)
+                        .background(open ? Theme.rowSelected : Theme.chip.opacity(0.6), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(needs ? Theme.ring : Color.clear, lineWidth: 1.5))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(t.inTerminal ? "Running in the terminal \(t.terminal ?? "")" : needs ? "Needs you. Click to open." : open ? "Click to close this subtask's output" : "Click to see this subtask's output and change its agent")
+                    .contextMenu {
+                        if ["failed", "needs_attention", "cancelled"].contains(t.status) { Button("Retry") { store.retry(t.id) } }
+                    }
+                }
+            }.padding(.horizontal, 8)
+        }
+        .frame(height: 32).background(Theme.bg)
     }
 }
 
@@ -130,8 +177,13 @@ struct RunStrip: View {
                         .help(on ? "Click to hide this run's agents" : run.goal)
                         .contextMenu {
                             Button(on ? "Hide agents" : "Show agents") { if on { store.hideRunPanes() } else { store.show(run: run.id) } }
-                            if store.closedPanes.contains(where: { $0.hasPrefix(run.id + "/") }) {
-                                Button("Show all panes") { store.closedPanes = store.closedPanes.filter { !$0.hasPrefix(run.id + "/") } }
+                            Button("Open all subtask panes") {
+                                store.show(run: run.id)
+                                store.closedPanes = store.closedPanes.filter { !$0.hasPrefix(run.id + "/") }
+                                store.openPanes.formUnion(run.tasks.map { "\(run.id)/\($0.id)" })
+                            }
+                            if store.openPanes.contains(where: { $0.hasPrefix(run.id + "/") }) {
+                                Button("Close all subtask panes") { store.openPanes = store.openPanes.filter { !$0.hasPrefix(run.id + "/") } }
                             }
                             Button("Delete run…", role: .destructive) { store.askDeleteRun(run) }
                         }

@@ -160,8 +160,8 @@ struct ClosePane: View {
     @EnvironmentObject var store: Store
     let key: String
     var body: some View {
-        Button { store.closedPanes.insert(key) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
-            .buttonStyle(IconButton()).foregroundStyle(Theme.dim).help("Remove this pane (bring it back from the run's right-click menu)")
+        Button { store.closedPanes.insert(key); store.openPanes.remove(key) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
+            .buttonStyle(IconButton()).foregroundStyle(Theme.dim).help("Close this pane")
     }
 }
 
