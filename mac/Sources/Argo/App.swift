@@ -65,6 +65,10 @@ struct ArgoApp: App {
                     }
                     hub.watchAppearance()
                     AppDelegate.dump = { [hub] in hub.dumpText() }
+                    // `ARGO_SAVE_LAYOUT=1` saves the current arrangement as the default shortly after launch (for headless checks).
+                    if ProcessInfo.processInfo.environment["ARGO_SAVE_LAYOUT"] != nil {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { LayoutTemplate.saved = hub.template(of: store.project, sizes: sizes) }
+                    }
                     // `ARGO_TAB=Report` opens that right-hand tab shortly after launch (for headless UI checks).
                     if let tab = ProcessInfo.processInfo.environment["ARGO_TAB"] {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { store.rightTab = tab }

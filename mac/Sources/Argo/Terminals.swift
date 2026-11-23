@@ -14,6 +14,26 @@ struct Member: Identifiable, Hashable {
     var worktree: String? = nil
 }
 
+/// A saved arrangement of terminals: either one terminal (`kind`) or a split of further templates.
+struct LayoutTemplate: Codable, Equatable {
+    var kind: String?
+    var horizontal: Bool?
+    var items: [LayoutTemplate]?
+    var weights: [Double]?
+
+    var count: Int { kind != nil ? 1 : (items ?? []).reduce(0) { $0 + $1.count } }
+
+    /// The default layout, kept per Mac. Stored as JSON text.
+    static let key = "defaultLayout"
+    static var saved: LayoutTemplate? {
+        get { UserDefaults.standard.string(forKey: key).flatMap { try? JSONDecoder().decode(LayoutTemplate.self, from: Data($0.utf8)) } }
+        set {
+            if let t = newValue, let d = try? JSONEncoder().encode(t) { UserDefaults.standard.set(String(decoding: d, as: UTF8.self), forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+    }
+}
+
 /// How the terminals are arranged: a tree of side-by-side and stacked splits, as in cmux.
 indirect enum Layout: Equatable {
     case leaf(UUID)
@@ -167,7 +187,8 @@ final class TeamHub: ObservableObject {
 
     /// Opens a terminal. It splits off `beside` (default: the focused pane), to the right or below.
     /// `in`: a worktree to work in instead of the project checkout; defaults to the worktree of the pane it splits from.
-    func add(kind: String, project: String, beside: UUID? = nil, horizontal: Bool = true, in tree: WorktreeInfo? = nil) {
+    @discardableResult
+    func add(kind: String, project: String, beside: UUID? = nil, horizontal: Bool = true, in tree: WorktreeInfo? = nil) -> UUID {
         let folder = WS.folder(project)
         let from = beside.flatMap { id in members.first { $0.id == id } }
         let worktree = tree?.name ?? from?.worktree
@@ -203,6 +224,42 @@ final class TeamHub: ObservableObject {
         // Ollama has no agent of its own: its launcher starts Claude Code on a model you pick from its menu
         let cmd = kind == "ollama" ? "exec ollama launch claude" : bin.map { "exec \($0) \(kind == "devin" ? "--" : "") '\(intro.replacingOccurrences(of: "'", with: "'\\''"))'" } ?? "exec /bin/zsh -l"
         v.startProcess(executable: "/bin/zsh", args: ["-l", "-i", "-c", cmd], environment: env, execName: nil, currentDirectory: cwd)
+        return m.id
+    }
+
+    // MARK: Default layout
+
+    /// The arrangement of this workspace's terminals (what each one runs, how they are split, and the
+    /// pane sizes), in a form that can be saved and rebuilt later.
+    func template(of ws: String, sizes: SplitSizes) -> LayoutTemplate? {
+        func capture(_ node: Layout) -> LayoutTemplate? {
+            switch node {
+            case .leaf(let id):
+                return members.first { $0.id == id }.map { LayoutTemplate(kind: $0.kind) }
+            case .split(let horizontal, let kids):
+                let live = kids.filter { capture($0) != nil }
+                return LayoutTemplate(horizontal: horizontal, items: live.compactMap(capture), weights: live.map { Double(sizes.weight[$0.key] ?? 1) })
+            }
+        }
+        return layouts[ws].flatMap(capture)
+    }
+
+    /// Opens the terminals a template describes in a workspace, split and sized the same way.
+    /// `usable` says whether a CLI is installed; one that is not becomes a plain shell.
+    func apply(_ template: LayoutTemplate, to ws: String, sizes: SplitSizes, usable: (String) -> Bool) {
+        func build(_ t: LayoutTemplate) -> Layout? {
+            if let kind = t.kind {
+                let known = Self.kinds.contains { $0.id == kind }
+                return .leaf(add(kind: known && (kind == "shell" || usable(kind)) ? kind : "shell", project: ws))
+            }
+            let kids = (t.items ?? []).compactMap(build)
+            guard !kids.isEmpty else { return nil }
+            for (i, k) in kids.enumerated() { sizes.weight[k.key] = CGFloat(i < (t.weights?.count ?? 0) ? max(0.05, t.weights![i]) : 1) }
+            return kids.count == 1 ? kids[0] : .split(horizontal: t.horizontal ?? true, kids)
+        }
+        // add() places each terminal as it goes; the tree built here replaces that with the saved arrangement
+        if let tree = build(template) { layouts[ws] = tree }
+        focused = members(in: ws).first?.id
     }
 
     func view(_ id: UUID) -> LocalProcessTerminalView? { views[id] }
@@ -349,5 +406,33 @@ struct AddMemberMenu: View {
             }
         } label: { Label("Add member", systemImage: "plus") }
         .menuStyle(.borderlessButton).fixedSize().tint(Theme.dim)
+    }
+}
+
+/// Save the current arrangement of terminals as the default for new workspaces and the next launch.
+struct LayoutMenu: View {
+    @EnvironmentObject var hub: TeamHub
+    @EnvironmentObject var store: Store
+    @EnvironmentObject var sizes: SplitSizes
+    @AppStorage(LayoutTemplate.key) private var stored = ""
+    var body: some View {
+        let ws = store.project
+        let open = hub.members(in: ws).count
+        let saved = stored.isEmpty ? nil : LayoutTemplate.saved
+        Menu {
+            Button("Save this layout as default") {
+                LayoutTemplate.saved = hub.template(of: ws, sizes: sizes)
+                store.banner = "Saved. New workspaces, and Argo the next time it opens, start with these \(open) terminal\(open == 1 ? "" : "s") arranged like this."
+            }.disabled(open == 0)
+            if let saved {
+                Button("Open the default layout here (\(saved.count) terminal\(saved.count == 1 ? "" : "s"))") {
+                    hub.apply(saved, to: ws, sizes: sizes) { store.agent($0)?.installed ?? false }
+                }.disabled(open > 0)
+                Divider()
+                Button("Clear the default layout") { LayoutTemplate.saved = nil }
+            }
+        } label: { Label("Layout", systemImage: "rectangle.split.2x2") }
+        .menuStyle(.borderlessButton).fixedSize().tint(Theme.dim)
+        .help(saved == nil ? "Save how the terminals are arranged as the default" : "Default layout: \(saved!.count) terminal\(saved!.count == 1 ? "" : "s")")
     }
 }

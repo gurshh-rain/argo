@@ -5,6 +5,7 @@ import SwiftUI
 struct WorkspaceView: View {
     @EnvironmentObject var hub: TeamHub
     @EnvironmentObject var store: Store
+    @EnvironmentObject var sizes: SplitSizes
 
     var body: some View {
         let ws = store.project
@@ -18,6 +19,7 @@ struct WorkspaceView: View {
                     .font(.system(size: 10.5)).foregroundStyle(Theme.dim)
                 Spacer()
                 WorktreeMenu()
+                LayoutMenu()
                 AddMemberMenu()
                 if store.filesHidden {
                     Button { store.filesHidden = false } label: { Image(systemName: "sidebar.right") }
@@ -73,13 +75,15 @@ struct WorkspaceView: View {
         .onChange(of: store.state == nil) { openFirstTerminal() }
     }
 
-    /// Each workspace starts with one shell to split from. Only once, so closing it does not bring it back.
+    /// Each workspace starts with the default layout (one shell unless you saved another). Only once, so closing terminals does not bring them back.
     func openFirstTerminal() {
         let ws = store.project
         guard store.state != nil, ProcessInfo.processInfo.environment["ARGO_DEMO_TEAM"] == nil,
               !hub.opened.contains(ws), hub.members(in: ws).isEmpty else { return }
         hub.opened.insert(ws)
-        hub.add(kind: "shell", project: ws)
+        // the saved default layout if there is one, otherwise a single shell
+        if let saved = LayoutTemplate.saved { hub.apply(saved, to: ws, sizes: sizes) { store.agent($0)?.installed ?? false } }
+        else { hub.add(kind: "shell", project: ws) }
     }
 }
 
