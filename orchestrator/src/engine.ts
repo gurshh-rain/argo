@@ -206,7 +206,7 @@ ${run.isolated
 - Your final message is your deliverable: give the complete result of your subtask, then note anything you could not establish.`}${resultFile ? `
 
 ## You are in a terminal the user is watching
-${run.isolated ? `- Your working directory for this subtask is ${t.worktree} (not the directory this session started in). cd there for every command and only touch files inside it.\n` : ''}- When you have finished, write your complete final message to ${resultFile}. Writing that file is how the orchestrator learns you are done, so do it last, and do it even if you could not finish (say why in it).` : ''}`
+${run.isolated ? `- Your working directory for this subtask is ${t.worktree} (not the directory this session started in). cd there for every command and only touch files inside it.\n` : ''}- To tell another terminal's agent something directly, run: "$ARGO_MSG" "<their name>" "<message>" ("$ARGO_MSG" --list shows the names). Messages from them arrive in your prompt as [Message from <name>].\n- When you have finished, write your complete final message to ${resultFile}. Writing that file is how the orchestrator learns you are done, so do it last, and do it even if you could not finish (say why in it).` : ''}`
 }
 
 async function execTask(run: Run, t: Task, extra?: { instruction?: string; escalate?: boolean }) {

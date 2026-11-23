@@ -56,6 +56,16 @@ struct ArgoApp: App {
                 }
                 .onAppear {
                     store.start()
+                    MailRoom.install()
+                    // `ARGO_TYPE_1` / `ARGO_TYPE_2` type a command into the first / second terminal after launch (headless checks)
+                    for (i, key) in ["ARGO_TYPE_1", "ARGO_TYPE_2"].enumerated() {
+                        if let cmd = ProcessInfo.processInfo.environment[key] {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 4 + Double(i) * 3) {
+                                let ms = hub.members(in: store.project)
+                                if i < ms.count { hub.view(ms[i].id)?.send(txt: cmd + "\r") }
+                            }
+                        }
+                    }
                     // look for a newer release at launch, then every six hours while open
                     Task {
                         while !Task.isCancelled {

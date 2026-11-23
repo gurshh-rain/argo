@@ -67,6 +67,9 @@ indirect enum Layout: Equatable {
 /// Owns the terminal views so a session survives while the user switches tabs.
 @MainActor
 final class TeamHub: ObservableObject {
+    /// The latest message each terminal received from another, and the recent conversation.
+    @Published var inbox: [UUID: Mail] = [:]
+    @Published var log: [Mail] = []
     private var appearanceWatch: NSKeyValueObservation?
 
     /// Terminal colors follow the app's appearance (Settings → Appearance, or the system's when set to System).
@@ -136,6 +139,7 @@ final class TeamHub: ObservableObject {
     /// Gives each subtask that is waiting for a terminal to a free one running the right CLI, and types the assignment into it.
     func dispatch(store: Store) async {
         await detectCLIs()
+        await deliverMail()
         guard let runs = store.state?.runs else { return }
         for run in runs where run.isActive {
             let ws = store.workspace(of: run)
@@ -217,12 +221,14 @@ final class TeamHub: ObservableObject {
         var env = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
         env += ["ARGO_MEMBER=\(m.name)", "ARGO_TEAM_FILE=\(argo)/team.md", "ARGO_RECORD=\(argo)/MEMORY.md"]
         if let worktree { env.append("ARGO_WORKTREE=\(worktree)") }
+        env += mailEnvironment(for: m)
+        writeMailRoster(project)
         let place = worktree.map { " You work in your own git worktree (branch argo/wt/\($0)), so other agents cannot see or overwrite your edits until they are merged. It tracks the remote branch: run `git pull` before you start and before you finish, so you build on what teammates have pushed." } ?? ""
         let intro = "You are \(m.name), one member of a team of coding agents working in this repo at the same time.\(place) Read \(argo)/team.md for the roster and \(argo)/MEMORY.md for the shared record. Coordinate through those files; write decisions as notes in \(argo)/notes/. Stay within your own task and do not overwrite files another member is editing."
         let bin = Self.kinds.first { $0.id == kind }?.bin
         // A login+interactive shell so PATH matches the user's Terminal (~/.local/bin etc.).
         // Ollama has no agent of its own: its launcher starts Claude Code on a model you pick from its menu
-        let cmd = kind == "ollama" ? "exec ollama launch claude" : bin.map { "exec \($0) \(kind == "devin" ? "--" : "") '\(intro.replacingOccurrences(of: "'", with: "'\\''"))'" } ?? "exec /bin/zsh -l"
+        let cmd = kind == "ollama" ? "exec ollama launch claude" : bin.map { "exec \($0) \(kind == "devin" ? "--" : "") '\((intro + MailRoom.briefing).replacingOccurrences(of: "'", with: "'\\''"))'" } ?? "exec /bin/zsh -l"
         v.startProcess(executable: "/bin/zsh", args: ["-l", "-i", "-c", cmd], environment: env, execName: nil, currentDirectory: cwd)
         return m.id
     }
@@ -270,7 +276,8 @@ final class TeamHub: ObservableObject {
         let ws = members.first { $0.id == id }?.workspace ?? ""
         members.removeAll { $0.id == id }
         layouts[ws] = layouts[ws]?.removing(id)
-        ringing.remove(id); exited.remove(id)
+        ringing.remove(id); exited.remove(id); inbox[id] = nil
+        writeMailRoster(ws)
         if focused == id { focused = members.last?.id }
         if !ws.isEmpty { writeRoster(project: ws) }
     }
@@ -278,6 +285,7 @@ final class TeamHub: ObservableObject {
     func focus(_ id: UUID) {
         focused = id
         ringing.remove(id)
+        inbox[id] = nil
         if let v = views[id] { v.window?.makeFirstResponder(v) }
     }
 
@@ -340,6 +348,7 @@ struct TerminalPane: View {
                     .help(info.map { $0.behind > 0 ? "\($0.behind) new commit(s) were pushed to \($0.upstream ?? "the remote"). Pull latest from the worktree menu." : "Up to date with \($0.upstream ?? "its base")" } ?? member.cwd)
             }
             if hub.exited.contains(member.id) { Chip(text: "exited") }
+            MailChip(member: member)
             if let job = store.runs(in: member.workspace).flatMap(\.tasks).first(where: { $0.terminal == member.name && $0.delegate?.state == "sent" }) {
                 StatusDot(status: "running")
                 Text("\(job.id): \(job.title)").font(.system(size: 11)).foregroundStyle(Theme.ring).lineLimit(1)
