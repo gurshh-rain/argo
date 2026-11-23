@@ -42,6 +42,21 @@ cd web && wasp install && wasp db migrate-dev
 On the phone: open the address and go to /app. There is no login: anyone who can reach the address can
 control your agents, so keep it on localhost or a private network (Tailscale).
 
+## Ollama
+
+Argo can also give subtasks to open models served by [Ollama](https://ollama.com), running on your
+Mac or in Ollama's cloud (model names ending in `-cloud`). Ollama serves models rather than acting as
+an agent, so Claude Code runs as the harness that edits files and runs commands, pointed at your
+Ollama server; this is what `ollama launch claude` does. You therefore need both Ollama running and
+Claude Code installed.
+
+- Models come from your Ollama server (`ollama list`). Pull one, e.g. `ollama pull qwen3-coder`, or
+  sign in to Ollama for cloud models. A different server: set `OLLAMA_HOST`.
+- Difficulty picks the model by size: the smallest for easy subtasks, the largest for hard ones.
+  Pin one in Settings, or name it in the task ("use gemma4:31b-cloud").
+- The planner only chooses Ollama when you ask for it; you can also make it the default CLI in
+  Settings or pick it per subtask.
+
 ## How it works
 
 - **Orchestration.** The lead CLI produces a plan (subtasks, dependencies, an agent/model/reasoning

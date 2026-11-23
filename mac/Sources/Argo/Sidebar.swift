@@ -26,8 +26,11 @@ struct Sidebar: View {
                         Circle().fill(a.installed == true ? Theme.agent(a.id) : Theme.dim.opacity(0.4)).frame(width: 6, height: 6)
                         Text(a.label).foregroundStyle(a.installed == true ? Theme.text : Theme.dim)
                         Spacer()
-                        Text(a.installed == true ? "ready" : "not installed").foregroundStyle(Theme.dim)
-                    }.font(.system(size: 10.5))
+                        Text(a.installed == true ? (a.id == "ollama" ? "\(a.models.count) model\(a.models.count == 1 ? "" : "s")" : "ready") : a.note != nil ? "needs setup" : "not installed")
+                            .foregroundStyle(Theme.dim)
+                    }
+                    .font(.system(size: 10.5))
+                    .help(a.note ?? (a.id == "ollama" && a.installed == true ? a.models.map { "\($0.id) (\($0.note))" }.joined(separator: "\n") : a.version ?? ""))
                 }
                 HStack {
                     Button { sheet = .settings } label: { Label("Settings", systemImage: "gearshape") }

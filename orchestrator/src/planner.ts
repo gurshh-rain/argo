@@ -9,7 +9,9 @@ const EFFORT: Record<Difficulty, Reasoning> = { easy: 'low', medium: 'medium', h
 // A model the user pinned for that CLI in Settings always wins over the tier.
 export function pick(agent: AgentId, difficulty: Difficulty): Assignment {
   const pinned = loadConfig().settings.models[agent]
-  const tiers = TIERS[agent]
+  // Ollama's tiers come from whatever models its server has right now
+  const live = agent === 'ollama' ? spec('ollama')?.tiers : undefined
+  const tiers = live ?? TIERS[agent]
   return { agent, model: pinned !== undefined ? pinned : (tiers?.[difficulty] ?? ''), reasoning: EFFORT[difficulty] }
 }
 
@@ -26,6 +28,7 @@ export function classify(text: string): Difficulty {
 export function defaultModel(agent: AgentId): string {
   const s = loadConfig().settings
   if (s.models[agent] !== undefined) return s.models[agent]
+  if (agent === 'ollama') return spec('ollama')?.tiers.medium ?? ''
   return { claude: 'sonnet', codex: '', devin: 'swe-2-high', mock: 'mock-1' }[agent]
 }
 
@@ -33,8 +36,8 @@ export function defaultModel(agent: AgentId): string {
 export function lead(): Assignment {
   const s = loadConfig().settings
   const have = installed().map((a) => a.id)
-  if (!have.length) throw new Error('No coding CLI found on PATH. Install Claude Code, Codex or Devin.')
-  const agent = s.defaultAgent !== 'auto' && have.includes(s.defaultAgent) ? s.defaultAgent : (['claude', 'codex', 'devin', 'mock'] as AgentId[]).find((a) => have.includes(a))!
+  if (!have.length) throw new Error('No coding CLI found on PATH. Install Claude Code, Codex or Devin, or start Ollama.')
+  const agent = s.defaultAgent !== 'auto' && have.includes(s.defaultAgent) ? s.defaultAgent : (['claude', 'codex', 'devin', 'ollama', 'mock'] as AgentId[]).find((a) => have.includes(a))!
   return { agent, model: defaultModel(agent), reasoning: s.reasoning }
 }
 
@@ -73,7 +76,8 @@ Rate each subtask's difficulty honestly; the orchestrator picks the model from i
 
 Return ONLY a JSON object, no prose, in this shape:
 {"constraints": ["constraints you inferred from the request or repo conventions"],
- "tasks": [{"id": "t1", "title": "short title", "description": "complete, self-contained instructions", "dependsOn": [], "agent": "<agent id>", "difficulty": "easy|medium|hard", "why": "one sentence on why this agent and this difficulty"}]}`
+ "tasks": [{"id": "t1", "title": "short title", "description": "complete, self-contained instructions", "dependsOn": [], "agent": "<agent id>", "difficulty": "easy|medium|hard", "why": "one sentence on why this agent and this difficulty"}]}
+Only when the user named a specific model, add "model": "<that model id>" to the subtasks that should use it.`
 }
 
 export function extractJson(text: string): any {
@@ -91,7 +95,7 @@ export function extractJson(text: string): any {
 const model = (a: Assignment) => (a.model ? a.model : 'its configured model')
 
 // Turn the planner's agent + difficulty into a concrete assignment, applying the user's defaults.
-export function route(want: { agent?: string; difficulty?: string; why?: string }): { auto: Task['auto']; difficulty: Difficulty } {
+export function route(want: { agent?: string; difficulty?: string; why?: string; model?: string }): { auto: Task['auto']; difficulty: Difficulty } {
   const s = loadConfig().settings
   const have = installed()
   const difficulty = LEVELS.includes(want.difficulty as Difficulty) ? (want.difficulty as Difficulty) : 'medium'
@@ -100,6 +104,9 @@ export function route(want: { agent?: string; difficulty?: string; why?: string 
   if (s.defaultAgent !== 'auto' && have.some((a) => a.id === s.defaultAgent)) (agent = s.defaultAgent), (why = `Your default CLI. ${want.why || ''}`.trim())
   else if (!agent) (agent = lead().agent), (why = `${want.agent || 'No agent'} is not available here; using ${spec(agent)!.label}.`)
   const a = pick(agent, difficulty)
+  // a model the user named outright beats the difficulty tier (this is how one Ollama model is asked for)
+  const named = want.model && spec(agent)?.models.some((m) => m.id === want.model)
+  if (named) return { difficulty, auto: { ...a, model: want.model!, why: `${why} You named the model ${want.model}.` } }
   return { difficulty, auto: { ...a, why: `${why} Rated ${difficulty}, so ${model(a)} at ${a.reasoning} reasoning.` } }
 }
 
@@ -120,8 +127,10 @@ export function tasksFromPlan(plan: any, run: Run): Task[] {
 
 // Follow-ups skip the planner: honour an agent named in the instruction, and judge difficulty from the wording.
 export function routeFollowup(text: string): { auto: Task['auto']; difficulty: Difficulty } {
-  const named = installed().find((a) => new RegExp(`\\b(${a.id}|${a.label})\\b`, 'i').test(text))
-  return route({ agent: named?.id || lead().agent, difficulty: classify(text), why: named ? `You asked for ${named.label}.` : 'Follow-up routed to the lead agent.' })
+  // an exact model name ("use gemma4:31b-cloud") picks that model's connector
+  const byModel = installed().flatMap((a) => a.models.filter((m) => m.id.length > 3 && text.toLowerCase().includes(m.id.toLowerCase())).map((m) => ({ a, m })))[0]
+  const named = byModel?.a || installed().find((a) => new RegExp(`\\b(${a.id}|${a.label})\\b`, 'i').test(text))
+  return route({ agent: named?.id || lead().agent, model: byModel?.m.id, difficulty: classify(text), why: named ? `You asked for ${named.label}.` : 'Follow-up routed to the lead agent.' })
 }
 
 // After a failure, step the subtask up one difficulty level so the retry gets a stronger model.

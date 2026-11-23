@@ -162,7 +162,7 @@ final class TeamHub: ObservableObject {
     private var delegates: [UUID: TermDelegate] = [:]
 
     static let kinds: [(id: String, label: String, bin: String?)] = [
-        ("claude", "Claude", "claude"), ("devin", "Devin", "devin"), ("codex", "Codex", "codex"), ("shell", "Shell", nil),
+        ("claude", "Claude", "claude"), ("devin", "Devin", "devin"), ("codex", "Codex", "codex"), ("ollama", "Ollama", "ollama"), ("shell", "Shell", nil),
     ]
 
     /// Opens a terminal. It splits off `beside` (default: the focused pane), to the right or below.
@@ -200,7 +200,8 @@ final class TeamHub: ObservableObject {
         let intro = "You are \(m.name), one member of a team of coding agents working in this repo at the same time.\(place) Read \(argo)/team.md for the roster and \(argo)/MEMORY.md for the shared record. Coordinate through those files; write decisions as notes in \(argo)/notes/. Stay within your own task and do not overwrite files another member is editing."
         let bin = Self.kinds.first { $0.id == kind }?.bin
         // A login+interactive shell so PATH matches the user's Terminal (~/.local/bin etc.).
-        let cmd = bin.map { "exec \($0) \(kind == "devin" ? "--" : "") '\(intro.replacingOccurrences(of: "'", with: "'\\''"))'" } ?? "exec /bin/zsh -l"
+        // Ollama has no agent of its own: its launcher starts Claude Code on a model you pick from its menu
+        let cmd = kind == "ollama" ? "exec ollama launch claude" : bin.map { "exec \($0) \(kind == "devin" ? "--" : "") '\(intro.replacingOccurrences(of: "'", with: "'\\''"))'" } ?? "exec /bin/zsh -l"
         v.startProcess(executable: "/bin/zsh", args: ["-l", "-i", "-c", cmd], environment: env, execName: nil, currentDirectory: cwd)
     }
 

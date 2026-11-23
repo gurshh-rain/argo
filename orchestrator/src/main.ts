@@ -16,7 +16,7 @@ process.on('unhandledRejection', (err) => console.error(new Date().toISOString()
 
 boot()
 console.log(new Date().toISOString(), 'starting')
-for (const a of agents()) console.log(`${a.installed ? '✓' : '✗'} ${a.label}${a.version ? ' ' + a.version : ' (not installed)'}`)
+for (const a of agents()) console.log(`${a.installed ? '✓' : '✗'} ${a.label}${a.version ? ' ' + a.version : ' (not installed)'}${a.note ? ' — ' + a.note : ''}${a.id === 'ollama' && a.installed ? ` (${a.models.length} model${a.models.length === 1 ? '' : 's'})` : ''}`)
 const server = serve()
 server.on('error', (err: NodeJS.ErrnoException) => {
   console.error(err.code === 'EADDRINUSE' ? 'Another Argo orchestrator is already running.' : err.message)

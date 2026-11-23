@@ -399,7 +399,9 @@ async function verify(run: Run) {
   const counts = new Map<string, number>()
   for (const t of run.tasks) counts.set(assignment(t).agent, (counts.get(assignment(t).agent) || 0) + 1)
   const busiest = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0]
-  const other = installed().find((a) => a.id !== busiest && counts.has(a.id)) || installed().find((a) => a.id !== busiest)
+  // an Ollama model is only asked to review when nothing else is available
+  const others = installed().filter((a) => a.id !== busiest).sort((a, b) => Number(a.id === 'ollama') - Number(b.id === 'ollama'))
+  const other = others.find((a) => counts.has(a.id) && a.id !== 'ollama') || others[0]
   const reviewer: Assignment = other ? { agent: other.id, model: defaultModel(other.id), reasoning: loadConfig().settings.reasoning } : lead()
   log(run, `Review by ${label(reviewer)}`)
   const ac = new AbortController()

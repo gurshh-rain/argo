@@ -45,6 +45,7 @@ enum Theme {
         case "claude": return adaptive(dark: NSColor(white: 0.95, alpha: 1), light: NSColor(white: 0.1, alpha: 1))
         case "codex": return adaptive(dark: NSColor(white: 0.7, alpha: 1), light: NSColor(white: 0.32, alpha: 1))
         case "devin": return adaptive(dark: NSColor(white: 0.55, alpha: 1), light: NSColor(white: 0.48, alpha: 1))
+        case "ollama": return adaptive(dark: NSColor(white: 0.82, alpha: 1), light: NSColor(white: 0.22, alpha: 1))
         default: return dim
         }
     }

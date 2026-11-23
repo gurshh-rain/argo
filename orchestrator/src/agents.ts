@@ -17,6 +17,8 @@ export interface AgentSpec {
   reasoning: boolean
   installed?: boolean
   version?: string
+  // why a connector that is present cannot be used yet, in words for the user
+  note?: string
 }
 
 export const CATALOG: AgentSpec[] = [
@@ -63,16 +65,86 @@ export const CATALOG: AgentSpec[] = [
     tiers: { easy: 'swe-2-flash-medium', medium: 'swe-2-high', hard: 'swe-2-max' },
     reasoning: false,
   },
+  {
+    // Open models served by Ollama, on this machine or in Ollama's cloud (names ending in "-cloud").
+    // Ollama serves models, it is not an agent, so Claude Code runs as the harness (file edits, commands,
+    // search) pointed at the Ollama server instead of Anthropic. This is what `ollama launch claude` does.
+    id: 'ollama',
+    label: 'Ollama',
+    bin: 'ollama',
+    strengths: 'open models run locally (private, free) or in Ollama cloud; quality depends on the model. Choose it when the user asks for Ollama, a local or open model, or names one of its models',
+    speed: 'medium',
+    cost: 'low',
+    models: [], // filled in from the Ollama server
+    tiers: { easy: '', medium: '', hard: '' },
+    reasoning: false,
+  },
 ]
 if (process.env.ARGO_MOCK)
   CATALOG.push({ id: 'mock', label: 'Mock', bin: 'node', strengths: 'testing the orchestrator', speed: 'fast', cost: 'low', models: [{ id: 'mock-1', note: 'scripted' }, { id: 'mock-2', note: 'scripted, stronger' }], tiers: { easy: 'mock-1', medium: 'mock-1', hard: 'mock-2' }, reasoning: false })
 
 export const TIERS: Record<string, Record<Difficulty, string>> = Object.fromEntries(CATALOG.map((a) => [a.id, a.tiers]))
 
+// Where the Ollama server is. OLLAMA_HOST may be "host:port" without a scheme, as Ollama itself accepts.
+export function ollamaHost(): string {
+  const h = (process.env.OLLAMA_HOST || '127.0.0.1:11434').replace(/\/+$/, '')
+  return /^https?:\/\//.test(h) ? h : `http://${h.replace(/^0\.0\.0\.0/, '127.0.0.1')}`
+}
+
+// Turn the server's model list into picker entries and difficulty tiers: the smallest model does the
+// easy work, the largest the hard work. Sizes come from names like "7.6B" or "32.7B".
+export function ollamaModels(tags: any): Pick<AgentSpec, 'models' | 'tiers'> {
+  const size = (m: any) => parseFloat(m?.details?.parameter_size) * (/M$/i.test(m?.details?.parameter_size || '') ? 0.001 : 1) || 0
+  const list: any[] = (Array.isArray(tags?.models) ? tags.models : []).filter((m: any) => m?.name && !/embed/i.test(m.name))
+  const sorted = [...list].sort((a, b) => size(a) - size(b))
+  const at = (f: number) => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * f + 0.5))]?.name ?? ''
+  return {
+    models: sorted.map((m) => ({ id: m.name, note: [m.remote_host ? 'Ollama cloud' : 'local', m.details?.parameter_size].filter(Boolean).join(', ') })),
+    tiers: { easy: at(0), medium: at(0.5), hard: at(1) },
+  }
+}
+
+function detectOllama(a: AgentSpec, haveClaude: boolean): AgentSpec {
+  let version: string
+  try {
+    version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0].replace(/^ollama version is /, '')
+  } catch {
+    return { ...a, installed: false }
+  }
+  let tags: any
+  try {
+    tags = JSON.parse(execFileSync('curl', ['-s', '-m', '3', `${ollamaHost()}/api/tags`], { encoding: 'utf8', timeout: 5000 }))
+  } catch {
+    return { ...a, installed: false, version, note: `Ollama is installed but its server is not answering at ${ollamaHost()}. Open the Ollama app or run \`ollama serve\`.` }
+  }
+  const found = ollamaModels(tags)
+  if (!found.models.length) return { ...a, installed: false, version, note: 'Ollama has no models yet. Pull one, for example `ollama pull qwen3-coder`, or sign in for cloud models.' }
+  if (!haveClaude) return { ...a, ...found, installed: false, version, note: 'Ollama models need Claude Code installed to act as the agent that edits files and runs commands.' }
+  return { ...a, ...found, installed: true, version }
+}
+
 let detected: AgentSpec[] | undefined
+let ollamaChecked = 0
 export function agents(refresh = false): AgentSpec[] {
-  if (detected && !refresh) return detected
-  detected = CATALOG.map((a) => {
+  if (detected && !refresh) {
+    // models are pulled and removed while we run, so look again now and then, without blocking
+    if (Date.now() - ollamaChecked > 30_000) {
+      ollamaChecked = Date.now()
+      const i = detected.findIndex((a) => a.id === 'ollama')
+      if (i >= 0 && detected[i].version)
+        fetch(`${ollamaHost()}/api/tags`, { signal: AbortSignal.timeout(3000) })
+          .then((r) => r.json())
+          .then((tags) => {
+            const found = ollamaModels(tags)
+            const haveClaude = !!detected!.find((a) => a.id === 'claude')?.installed
+            if (found.models.length && haveClaude) detected![i] = { ...detected![i], ...found, installed: true, note: undefined }
+          })
+          .catch(() => {})
+    }
+    return detected
+  }
+  ollamaChecked = Date.now()
+  detected = CATALOG.filter((a) => a.id !== 'ollama').map((a) => {
     try {
       const version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0]
       return { ...a, installed: true, version }
@@ -80,6 +152,11 @@ export function agents(refresh = false): AgentSpec[] {
       return { ...a, installed: false }
     }
   })
+  const ollama = CATALOG.find((a) => a.id === 'ollama')
+  if (ollama) {
+    const at = detected.findIndex((a) => a.id === 'mock')
+    detected.splice(at < 0 ? detected.length : at, 0, detectOllama(ollama, !!detected.find((a) => a.id === 'claude')?.installed))
+  }
   return detected
 }
 export const installed = () => agents().filter((a) => a.installed)
@@ -107,8 +184,16 @@ export interface RunResult {
   error?: string
 }
 
-function command(o: RunOpts, tmp: string): { bin: string; args: string[]; stdin?: string } {
+function command(o: RunOpts, tmp: string): { bin: string; args: string[]; stdin?: string; env?: Record<string, string> } {
   switch (o.agent) {
+    case 'ollama': {
+      // Claude Code as the harness, talking to Ollama's Anthropic-compatible endpoint
+      const args = ['-p', '--output-format', 'stream-json', '--verbose', '--model', o.model]
+      if (o.readOnly) args.push('--disallowedTools', 'Edit', 'Write', 'NotebookEdit')
+      else args.push('--permission-mode', o.escalate ? 'bypassPermissions' : 'acceptEdits')
+      for (const d of o.addDirs || []) args.push('--add-dir', d)
+      return { bin: 'claude', args, stdin: o.prompt, env: { ANTHROPIC_BASE_URL: ollamaHost(), ANTHROPIC_AUTH_TOKEN: 'ollama', ANTHROPIC_API_KEY: '' } }
+    }
     case 'claude': {
       const args = ['-p', '--output-format', 'stream-json', '--verbose']
       if (o.model) args.push('--model', o.model)
@@ -144,10 +229,11 @@ const short = (s: unknown, n = 160) => String(typeof s === 'string' ? s : JSON.s
 
 // Turn each CLI's event stream into readable terminal-style lines.
 function parser(agent: AgentId, out: RunResult, emit: (l: string) => void) {
-  if (agent === 'claude')
+  if (agent === 'claude' || agent === 'ollama')
     return (line: string) => {
       let e: any
-      try { e = JSON.parse(line) } catch { return emit(line) }
+      // with Ollama behind it, Claude Code prints notices about its own sign-in and model list; they are noise here
+      try { e = JSON.parse(line) } catch { return agent === 'ollama' && /claude\.ai connectors|unrecognized_model/.test(line) ? undefined : emit(line) }
       if (e.type === 'system' && e.subtype === 'init') out.sessionId = e.session_id
       else if (e.type === 'assistant')
         for (const c of e.message?.content || []) {
@@ -190,14 +276,14 @@ function parser(agent: AgentId, out: RunResult, emit: (l: string) => void) {
 
 export function runAgent(o: RunOpts): Promise<RunResult> {
   const tmp = mkdtempSync(join(tmpdir(), 'argo-'))
-  const { bin, args, stdin } = command(o, tmp)
+  const { bin, args, stdin, env } = command(o, tmp)
   const out: RunResult = { ok: false, text: '', denials: [] }
-  const structured = o.agent === 'claude' || o.agent === 'codex'
+  const structured = o.agent === 'claude' || o.agent === 'codex' || o.agent === 'ollama'
   const parse = parser(o.agent, out, o.onLine)
   return new Promise((resolve) => {
     let child
     try {
-      child = spawn(bin, args, { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1' }, signal: o.signal })
+      child = spawn(bin, args, { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1', ...env }, signal: o.signal })
     } catch (err) {
       return resolve({ ...out, error: String(err) })
     }

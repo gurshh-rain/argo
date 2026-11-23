@@ -12,6 +12,8 @@ struct AgentSpec: Codable, Identifiable, Hashable {
     let reasoning: Bool
     let installed: Bool?
     let version: String?
+    /// Why a connector that is present cannot be used yet.
+    let note: String?
 }
 
 struct Assignment: Codable, Hashable {

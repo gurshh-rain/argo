@@ -1,4 +1,4 @@
-export type AgentId = 'claude' | 'codex' | 'devin' | 'mock'
+export type AgentId = 'claude' | 'codex' | 'devin' | 'ollama' | 'mock'
 export type Reasoning = 'low' | 'medium' | 'high'
 export type Difficulty = 'easy' | 'medium' | 'hard'
 export type TaskStatus = 'pending' | 'running' | 'merging' | 'done' | 'failed' | 'needs_attention' | 'cancelled'

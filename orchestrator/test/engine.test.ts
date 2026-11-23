@@ -157,3 +157,25 @@ test('with terminals on, subtasks others depend on wait for a terminal; final on
   assert.equal(run.tasks[1].terminal, undefined)
   assert.equal(run.tasks[2].terminal, undefined, 'the final subtask never waits for a terminal')
 })
+
+test('Ollama: models and difficulty tiers come from the server\'s list, and it runs through the Claude Code harness', async () => {
+  const { ollamaModels, ollamaHost } = await import('../src/agents.ts')
+  const found = ollamaModels({ models: [
+    { name: 'qwen3-coder:30b', details: { parameter_size: '30.5B' } },
+    { name: 'gemma4:31b-cloud', details: { parameter_size: '32.7B' }, remote_host: 'https://ollama.com' },
+    { name: 'llama3.2:1b', details: { parameter_size: '1.2B' } },
+    { name: 'nomic-embed-text', details: { parameter_size: '137M' } },
+  ] })
+  assert.deepEqual(found.models.map((m) => m.id), ['llama3.2:1b', 'qwen3-coder:30b', 'gemma4:31b-cloud'], 'smallest first, embedding models left out')
+  assert.deepEqual(found.tiers, { easy: 'llama3.2:1b', medium: 'qwen3-coder:30b', hard: 'gemma4:31b-cloud' })
+  assert.equal(found.models[2].note, 'Ollama cloud, 32.7B')
+  assert.deepEqual(ollamaModels({ models: [{ name: 'only:7b', details: { parameter_size: '7B' } }] }).tiers, { easy: 'only:7b', medium: 'only:7b', hard: 'only:7b' })
+  assert.deepEqual(ollamaModels({}).models, [])
+  const before = process.env.OLLAMA_HOST
+  process.env.OLLAMA_HOST = '0.0.0.0:11500'
+  assert.equal(ollamaHost(), 'http://127.0.0.1:11500')
+  process.env.OLLAMA_HOST = 'https://ollama.example.com/'
+  assert.equal(ollamaHost(), 'https://ollama.example.com')
+  if (before === undefined) delete process.env.OLLAMA_HOST
+  else process.env.OLLAMA_HOST = before
+})
