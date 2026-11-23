@@ -132,7 +132,7 @@ struct RootView: View {
                 Group {
                     if store.rightTab == "Usage" { UsagePanel() }
                     else if let run = store.run, store.rightTab != "Files" { Inspector(run: run) } else { FilesPanel() }
-                }.frame(width: 300)
+                }.frame(width: 300).clipped()
             }
         }
         .overlay(alignment: .topLeading) {

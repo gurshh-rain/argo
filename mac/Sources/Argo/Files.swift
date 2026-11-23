@@ -17,17 +17,7 @@ struct FilesPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                HStack(spacing: 4) { RightTabs() }.buttonStyle(.plain)
-                Button { searching.toggle(); if !searching { filter = "" } } label: { Image(systemName: "magnifyingglass") }
-                    .foregroundStyle(searching ? Theme.text : Theme.dim).help("Filter by name")
-                Button { cache = [:] } label: { Image(systemName: "arrow.clockwise") }.help("Reload")
-                Button { NSWorkspace.shared.open(URL(fileURLWithPath: root)) } label: { Image(systemName: "macwindow") }.help("Show in Finder")
-                Spacer()
-                Button { store.filesHidden = true } label: { Image(systemName: "sidebar.right") }.help("Hide files")
-            }
-            .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim)
-            .padding(.horizontal, 8).frame(height: 30)
+            RightHeader()
             HLine()
             if searching {
                 TextField("Filter", text: $filter).textFieldStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.text)
@@ -37,9 +27,16 @@ struct FilesPanel: View {
             HStack(spacing: 6) {
                 Image(systemName: "folder.fill").font(.system(size: 11))
                 Text(root.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.system(size: 12)).lineLimit(1).truncationMode(.head)
-                Spacer()
+                Spacer(minLength: 4)
+                // the file tools sit with the folder they act on, not in the tab row
+                Group {
+                    Button { searching.toggle(); if !searching { filter = "" } } label: { Image(systemName: "magnifyingglass") }
+                        .foregroundStyle(searching ? Theme.text : Theme.dim).help("Filter by name")
+                    Button { cache = [:] } label: { Image(systemName: "arrow.clockwise") }.help("Reload")
+                    Button { NSWorkspace.shared.open(URL(fileURLWithPath: root)) } label: { Image(systemName: "macwindow") }.help("Show in Finder")
+                }.buttonStyle(IconButton()).font(.system(size: 11.5))
             }
-            .foregroundStyle(Theme.dim).padding(.horizontal, 12).frame(height: 28)
+            .foregroundStyle(Theme.dim).padding(.leading, 12).padding(.trailing, 8).frame(height: 28)
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(rows(of: root, depth: 0)) { r in row(r) }

@@ -7,13 +7,7 @@ struct Inspector: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                RightTabs()
-                Spacer()
-                Button { store.filesHidden = true } label: { Image(systemName: "sidebar.right") }
-                    .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Hide panel")
-            }
-            .padding(.horizontal, 8).frame(height: 30)
+            RightHeader()
             HLine()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -124,6 +118,21 @@ struct Inspector: View {
     }
 }
 
+/// The top row of the right-hand panel, the same in every tab: the tabs on the left, hide on the right.
+/// Nothing else lives here, so the row always fits the panel however many tabs a run adds.
+struct RightHeader: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        HStack(spacing: 2) {
+            RightTabs()
+            Spacer(minLength: 0)
+            Button { store.filesHidden = true } label: { Image(systemName: "sidebar.right") }
+                .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Hide panel")
+        }
+        .padding(.horizontal, 8).frame(maxWidth: .infinity, alignment: .leading).frame(height: 30).clipped()
+    }
+}
+
 /// Files and Usage always; Record and Report when a run is showing.
 struct RightTabs: View {
     @EnvironmentObject var store: Store
@@ -133,7 +142,7 @@ struct RightTabs: View {
             Button { store.rightTab = t } label: {
                 Text(t).fixedSize()
                     .font(.system(size: 11.5, weight: .medium)).foregroundStyle(on ? Theme.text : Theme.dim)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .padding(.horizontal, 7).padding(.vertical, 3)
                     .background(on ? Theme.chip : .clear, in: RoundedRectangle(cornerRadius: 5))
             }.buttonStyle(.plain)
         }

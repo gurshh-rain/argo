@@ -25,13 +25,7 @@ struct UsagePanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                RightTabs()
-                Spacer()
-                Button { store.filesHidden = true } label: { Image(systemName: "sidebar.right") }
-                    .buttonStyle(IconButton()).font(.system(size: 12)).foregroundStyle(Theme.dim).help("Hide panel")
-            }
-            .padding(.horizontal, 8).frame(height: 30)
+            RightHeader()
             HLine()
             ScrollView {
                 let all = entries
