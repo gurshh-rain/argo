@@ -180,6 +180,8 @@ export interface RunResult {
   text: string
   sessionId?: string
   costUsd?: number
+  tokensIn?: number
+  tokensOut?: number
   denials: string[]
   error?: string
 }
@@ -245,6 +247,11 @@ function parser(agent: AgentId, out: RunResult, emit: (l: string) => void) {
       if (e.type === 'result') {
         out.text = e.result || out.text
         out.costUsd = e.total_cost_usd
+        const u = e.usage
+        if (u) {
+          out.tokensIn = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0)
+          out.tokensOut = u.output_tokens || 0
+        }
         out.ok = !e.is_error
         if (e.is_error) out.error = short(e.result || e.subtype, 400)
         for (const d of e.permission_denials || []) out.denials.push(`${d.tool_name}(${short(d.tool_input?.command ?? d.tool_input?.file_path ?? d.tool_input, 70)})`)
@@ -266,7 +273,14 @@ function parser(agent: AgentId, out: RunResult, emit: (l: string) => void) {
         out.ok = false
         out.error = short(e.error?.message || e.message, 400)
         emit(`error: ${out.error}`)
-      } else if (e.type === 'turn.completed') out.ok = out.error === undefined
+      } else if (e.type === 'turn.completed') {
+        out.ok = out.error === undefined
+        // Codex reports tokens per turn but no price
+        if (e.usage) {
+          out.tokensIn = (out.tokensIn || 0) + (e.usage.input_tokens || 0)
+          out.tokensOut = (out.tokensOut || 0) + (e.usage.output_tokens || 0)
+        }
+      }
     }
   return (line: string) => {
     emit(line)

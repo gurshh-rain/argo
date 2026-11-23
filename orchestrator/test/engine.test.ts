@@ -79,6 +79,13 @@ test('a failing agent raises attention and a spoken instruction retries it', asy
   assert.equal(run.tasks[0].difficulty, 'medium', 'a failed subtask is escalated one level for the retry')
   await until(() => run.status === 'done')
   assert.ok(runs.has(run.id) && loadConfig().projects.includes(project))
+  // every agent call is recorded for the Usage view, and the failure and retry are both attempts of t1
+  const t1 = run.usage!.filter((c) => c.role === 'task' && c.taskId === 't1')
+  assert.deepEqual(t1.map((c) => c.ok), [false, true])
+  assert.ok(run.usage!.some((c) => c.role === 'plan') && run.usage!.some((c) => c.role === 'review'))
+  // and the planner sees the track record on the next run in this project
+  const { trackRecord } = await import('../src/usage.ts')
+  assert.match(trackRecord(project), /mock "mock-1": \d+ subtask attempts, \d+% succeeded/)
 })
 
 test('difficulty maps to each CLI\'s model tiers, and follow-ups are judged by wording', async () => {

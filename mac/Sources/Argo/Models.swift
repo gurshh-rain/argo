@@ -83,6 +83,8 @@ struct Run: Codable, Identifiable, Hashable {
     let decisions: [Decision]
     let followups: [Followup]
     let report: Report?
+    /// Every agent call in the run (planning, subtasks, merges, review). Absent on runs saved before it was recorded.
+    let usage: [UsageCall]?
     let applied: Bool?
     let error: String?
 
@@ -90,6 +92,21 @@ struct Run: Codable, Identifiable, Hashable {
     var isResearch: Bool { project.contains("/.argo/workspaces/") }
     var projectName: String { isResearch ? "research" : (project as NSString).lastPathComponent }
     var isActive: Bool { ["planning", "running", "verifying"].contains(status) }
+}
+
+/// One agent invocation: who ran, what for, whether it worked, and what the CLI said it cost.
+struct UsageCall: Codable, Hashable {
+    let at: Double
+    let ms: Double
+    let role: String
+    let taskId: String?
+    let agent: String
+    let model: String
+    let ok: Bool
+    let costUsd: Double?
+    let tokensIn: Double?
+    let tokensOut: Double?
+    let terminal: Bool?
 }
 
 struct AttentionItem: Codable, Identifiable, Hashable {

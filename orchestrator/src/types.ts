@@ -42,6 +42,24 @@ export interface Task {
   costUsd?: number
 }
 
+// One agent invocation: who ran, what for, whether it worked and what it cost. Feeds the Usage view
+// in the Mac app and the planner's track record, so routing learns from what actually happened.
+export interface UsageCall {
+  at: number
+  ms: number
+  role: 'plan' | 'task' | 'merge' | 'sync' | 'review'
+  taskId?: string
+  agent: AgentId
+  model: string
+  ok: boolean
+  // dollars as reported by the CLI; absent when it reports none (Codex, Devin, or work done in a user's terminal)
+  costUsd?: number
+  tokensIn?: number
+  tokensOut?: number
+  // ran in one of the user's terminals rather than as a background process
+  terminal?: boolean
+}
+
 export interface Decision {
   at: number
   by: string
@@ -99,6 +117,7 @@ export interface Run {
   decisions: Decision[]
   followups: { at: number; source: string; text: string }[]
   report?: Report
+  usage?: UsageCall[]
   applied?: boolean
   error?: string
 }

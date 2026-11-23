@@ -130,7 +130,8 @@ struct RootView: View {
             if !store.filesHidden && store.startupError == nil {
                 VLine()
                 Group {
-                    if let run = store.run, store.rightTab != "Files" { Inspector(run: run) } else { FilesPanel() }
+                    if store.rightTab == "Usage" { UsagePanel() }
+                    else if let run = store.run, store.rightTab != "Files" { Inspector(run: run) } else { FilesPanel() }
                 }.frame(width: 300)
             }
         }

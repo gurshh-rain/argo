@@ -124,12 +124,12 @@ struct Inspector: View {
     }
 }
 
-/// Files always; Record and Report when a run is showing.
+/// Files and Usage always; Record and Report when a run is showing.
 struct RightTabs: View {
     @EnvironmentObject var store: Store
     var body: some View {
-        ForEach(store.run == nil ? ["Files"] : ["Files", "Record", "Report"], id: \.self) { t in
-            let on = store.rightTab == t || (store.run == nil && t == "Files")
+        ForEach(store.run == nil ? ["Files", "Usage"] : ["Files", "Record", "Report", "Usage"], id: \.self) { t in
+            let on = store.rightTab == t || (store.run == nil && t == "Files" && store.rightTab != "Usage")
             Button { store.rightTab = t } label: {
                 Text(t).fixedSize()
                     .font(.system(size: 11.5, weight: .medium)).foregroundStyle(on ? Theme.text : Theme.dim)

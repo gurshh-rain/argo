@@ -86,7 +86,7 @@ final class Store: ObservableObject {
         UserDefaults.standard.set(ws, forKey: "project")
         remember(ws)
         selectedRun = runs(in: ws).first { !hiddenRuns.contains($0.id) }?.id
-        if selectedRun == nil { rightTab = "Files" }
+        if selectedRun == nil && rightTab != "Usage" { rightTab = "Files" }
     }
     private func remember(_ ws: String) {
         guard !ws.isEmpty, !workspaces.contains(ws) else { return }
@@ -107,7 +107,7 @@ final class Store: ObservableObject {
     func hideRunPanes() {
         if let id = selectedRun { hiddenRuns.insert(id) }
         selectedRun = nil
-        rightTab = "Files"
+        if rightTab != "Usage" { rightTab = "Files" }
     }
 
     func askDeleteRun(_ run: Run) {
@@ -124,7 +124,7 @@ final class Store: ObservableObject {
         act {
             for r in list {
                 let _: Ignored = try await self.daemon.request("DELETE", "runs/\(r.id)")
-                if self.selectedRun == r.id { self.selectedRun = nil; self.rightTab = "Files" }
+                if self.selectedRun == r.id { self.selectedRun = nil; if self.rightTab != "Usage" { self.rightTab = "Files" } }
             }
         }
     }

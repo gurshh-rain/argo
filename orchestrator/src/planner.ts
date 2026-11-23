@@ -1,6 +1,7 @@
 import type { AgentId, Assignment, Difficulty, Reasoning, Run, Task } from './types.ts'
 import { installed, spec, TIERS } from './agents.ts'
 import { loadConfig } from './config.ts'
+import { trackRecord } from './usage.ts'
 
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
 const EFFORT: Record<Difficulty, Reasoning> = { easy: 'low', medium: 'medium', hard: 'high' }
@@ -50,6 +51,7 @@ export function planPrompt(run: Run): string {
     s.defaultAgent === 'auto'
       ? `Assign each subtask to the agent that fits it best, weighing the agent's strengths, speed and cost. When more than one agent is available and the work allows it, spread subtasks across agents.`
       : `The user has pinned every subtask to "${s.defaultAgent}"; set "agent" to that.`
+  const history = trackRecord(run.project)
   const where = run.isolated
     ? 'on one repository (the current directory). Inspect the repository as needed, but do not modify anything.'
     : 'on a request that is not tied to a git repository: research, analysis, writing, or work in a plain folder (the current directory). The agents can read files, run commands and search the web.'
@@ -61,7 +63,11 @@ ${run.constraints.length ? '\n## Constraints given by the user\n' + run.constrai
 
 ## Available agents
 ${roster}
-
+${history ? `
+## Track record in this project
+How earlier subtasks here went. Prefer agents and models that succeed here at a reasonable cost; a low success rate is a reason to pick a different agent or a harder difficulty, but a handful of attempts is weak evidence.
+${history}
+` : ''}
 ## What to produce
 Break the request into the smallest set of subtasks (1-6) that can each be done by one agent in one sitting. ${run.isolated ? 'Each runs in its own git worktree and is merged afterwards, so:' : 'They all share one working folder and one shared record, so:'}
 - subtasks with no dependency between them run IN PARALLEL: ${run.isolated ? 'give them disjoint files so merges are clean, and state the exact file paths, function names and interfaces each must use so parallel work fits together' : 'give each a distinct question or angle so they do not duplicate each other, and if they write files give them different file names'};${run.isolated ? '' : '\n- when several subtasks gather findings, end with ONE subtask that depends on them and writes the final answer for the user from what they found;'}

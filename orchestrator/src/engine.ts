@@ -5,6 +5,7 @@ import { loadConfig, WORKSPACES, WORKTREES } from './config.ts'
 import { runs, attention, save, emit, ensureProject, loadProject, renderMemory, ingestNotes, appendLog, assignment, dir, flush } from './store.ts'
 import { runAgent, spec, installed, type RunResult } from './agents.ts'
 import * as g from './git.ts'
+import { record } from './usage.ts'
 import { lead, planPrompt, extractJson, tasksFromPlan, route, routeFollowup, reviewPrompt, defaultModel, harder, classify } from './planner.ts'
 
 const aborts = new Map<string, AbortController>()
@@ -81,10 +82,12 @@ async function pullLatest(run: Run, when: string): Promise<boolean> {
   if (p.conflicts.length) {
     const a = lead()
     log(run, `${p.pulled} new commit(s) on ${up} conflict with this run in ${p.conflicts.join(', ')}; asking ${label(a)} to resolve them`)
+    const started = Date.now()
     const res = await runAgent({
       ...a, cwd, onLine: (l) => log(run, l),
       prompt: `Someone pushed ${p.pulled} new commit(s) to ${up}. Merging them into this run's integration branch stopped with conflicts in: ${p.conflicts.join(', ')}.\nResolve every conflict marker in those files so that BOTH sides' intent is preserved. Do not run git commit or git merge; just edit the files.\n\nContext:\n${renderMemory(run)}`,
     })
+    record(run, 'sync', a, res, started)
     if (!res.ok || !(await g.commitMerge(cwd, `Merge latest ${up} (conflicts resolved)`))) {
       await g.git(cwd, 'merge', '--abort')
       raise(run, 'conflict', `${p.pulled} new commit(s) on ${up} conflict with this run in ${p.conflicts.join(', ')}. The run continues without them; merge ${up} before you push.`)
@@ -113,8 +116,10 @@ async function plan(run: Run, autoApprove: boolean) {
   log(run, `Planning with ${label(p)} (reasoning: ${p.reasoning})`)
   const ac = new AbortController()
   aborts.set(key(run, 'plan'), ac)
+  const started = Date.now()
   const res = await runAgent({ ...p, cwd: base(run), prompt: planPrompt(run), readOnly: true, signal: ac.signal, onLine: (l) => log(run, l) })
   aborts.delete(key(run, 'plan'))
+  record(run, 'plan', p, res, started)
   if (run.status === 'cancelled') return
   const parsed = extractJson(res.text)
   let tasks = tasksFromPlan(parsed, run)
@@ -240,6 +245,8 @@ async function execTask(run: Run, t: Task, extra?: { instruction?: string; escal
   t.finishedAt = Date.now()
   t.sessionId = res.sessionId || t.sessionId
   t.costUsd = (t.costUsd || 0) + (res.costUsd || 0)
+  // an attempt that was blocked from running a command did not succeed, even though the CLI exited cleanly
+  record(run, 'task', a, res, t.startedAt!, { taskId: t.id, terminal: toTerminal && !t.headless, ok: res.ok && !res.denials.length })
   t.summary = res.text.slice(-1500)
   if (res.text) writeFileSync(dir(run.project, 'results', `${run.id}-${t.id}.md`), res.text + '\n')
   ingestNotes(run)
@@ -339,10 +346,12 @@ async function integrate(run: Run, t: Task, a: Assignment, out: (l: string) => v
   const m = await g.merge(run.id, t.id, t.title)
   if (!m.ok) {
     out(`Merge conflict in ${m.conflicts.join(', ')}; asking ${label(a)} to resolve it`)
+    const started = Date.now()
     const res = await runAgent({
       ...a, cwd: g.mainTree(run.id), onLine: out,
       prompt: `A git merge of subtask "${t.title}" into the integration branch stopped with conflicts in: ${m.conflicts.join(', ')}.\nResolve every conflict marker in those files so that BOTH sides' intent is preserved. Do not run git commit or git merge; just edit the files.\n\nContext:\n${renderMemory(run)}`,
     })
+    record(run, 'merge', a, res, started, { taskId: t.id })
     if (!res.ok || !(await g.concludeMerge(run.id, t.id, t.title))) {
       await g.abortMerge(run.id)
       t.status = 'needs_attention'
@@ -406,11 +415,13 @@ async function verify(run: Run) {
   log(run, `Review by ${label(reviewer)}`)
   const ac = new AbortController()
   aborts.set(key(run, 'review'), ac)
+  const started = Date.now()
   const res = await runAgent({
     ...reviewer, cwd, readOnly: true, signal: ac.signal, onLine: (l) => log(run, l),
     prompt: reviewPrompt(run, stat, checks.map((c) => `- \`${c.command}\`: ${c.ok ? 'passed' : 'FAILED\n' + c.output.slice(-800)}`).join('\n')),
   })
   aborts.delete(key(run, 'review'))
+  record(run, 'review', reviewer, res, started)
   if ((run.status as string) === 'cancelled') return
   if (run.isolated) await g.git(cwd, 'checkout', '--', '.')
   // without a repo the deliverable is text: the output of the subtask(s) nothing else depends on
