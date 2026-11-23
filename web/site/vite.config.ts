@@ -1,13 +1,14 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 const local = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineConfig({
   root: local('./'),
   publicDir: local('../public'),
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     // Shared page files live above this isolated package; resolve their React here.
     alias: {
