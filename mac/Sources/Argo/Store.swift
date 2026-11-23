@@ -40,6 +40,14 @@ final class Store: ObservableObject {
     /// Names the user gave to workspaces (folder workspaces default to the folder's name).
     @Published var names: [String: String] = (UserDefaults.standard.dictionary(forKey: "workspaceNames") as? [String: String]) ?? [:]
     @Published var renaming: String?
+    /// A note the user wrote for a workspace, shown on its tab.
+    @Published var descriptions: [String: String] = (UserDefaults.standard.dictionary(forKey: "workspaceDescriptions") as? [String: String]) ?? [:]
+    @Published var describing: String?
+    func describe(_ ws: String, _ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        descriptions[ws] = t.isEmpty ? nil : String(t.prefix(200))
+        UserDefaults.standard.set(descriptions, forKey: "workspaceDescriptions")
+    }
     /// Which workspace each run was started from. Runs without a folder would otherwise be indistinguishable.
     private var owner: [String: String] = (UserDefaults.standard.dictionary(forKey: "runOwners") as? [String: String]) ?? [:]
     /// The folder of the selected workspace, or "" when it has none.
@@ -127,6 +135,7 @@ final class Store: ObservableObject {
         UserDefaults.standard.set(workspaces, forKey: "workspaces")
         names[ws] = nil
         UserDefaults.standard.set(names, forKey: "workspaceNames")
+        describe(ws, "")
         if project == ws { select(workspace: workspaces.first ?? "") }
     }
 

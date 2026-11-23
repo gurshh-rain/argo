@@ -58,6 +58,10 @@ struct ArgoApp: App {
                     store.start()
                     hub.watchAppearance()
                     AppDelegate.dump = { [hub] in hub.dumpText() }
+                    // `ARGO_TAB=Report` opens that right-hand tab shortly after launch (for headless UI checks).
+                    if let tab = ProcessInfo.processInfo.environment["ARGO_TAB"] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { store.rightTab = tab }
+                    }
                     // `ARGO_DEMO_TEAM=1` opens a few terminals at launch (for headless UI checks).
                     if ProcessInfo.processInfo.environment["ARGO_DEMO_TEAM"] != nil {
                         for k in ["claude", "devin", "shell"] { hub.add(kind: k, project: store.project, horizontal: k != "shell") }
@@ -117,6 +121,9 @@ struct RootView: View {
         .alert("Rename workspace", isPresented: Binding(get: { store.renaming != nil }, set: { if !$0 { store.renaming = nil } })) {
             RenameField()
         }
+        .alert("Workspace description", isPresented: Binding(get: { store.describing != nil }, set: { if !$0 { store.describing = nil } })) {
+            DescribeField()
+        } message: { Text("A short note shown on the workspace's tab.") }
         .alert("Argo", isPresented: Binding(get: { store.banner != nil }, set: { if !$0 { store.banner = nil } })) {
             Button("OK") { store.banner = nil }
         } message: { Text(store.banner ?? "") }
@@ -137,6 +144,17 @@ struct RenameField: View {
     var body: some View {
         TextField("Name", text: $name).onAppear { name = store.renaming.map(store.name(of:)) ?? "" }
         Button("Rename") { if let ws = store.renaming { store.rename(ws, to: name) } }
+        Button("Cancel", role: .cancel) {}
+    }
+}
+
+/// Text field and buttons for the description alert.
+struct DescribeField: View {
+    @EnvironmentObject var store: Store
+    @State private var text = ""
+    var body: some View {
+        TextField("What this workspace is for", text: $text).onAppear { text = store.describing.flatMap { store.descriptions[$0] } ?? "" }
+        Button("Save") { if let ws = store.describing { store.describe(ws, text) } }
         Button("Cancel", role: .cancel) {}
     }
 }

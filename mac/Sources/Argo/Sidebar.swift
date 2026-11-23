@@ -12,7 +12,6 @@ struct Sidebar: View {
                 LazyVStack(spacing: 4) {
                     ForEach(store.workspaceList(terminals: hub.members.map(\.workspace)), id: \.self) { ws in
                         WorkspaceTab(ws: ws)
-                        if ws == store.project { TeamSection(ws: ws) }
                     }
                     Button(action: store.newWorkspace) {
                         Label("New workspace", systemImage: "plus").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
@@ -101,6 +100,10 @@ struct WorkspaceTab: View {
                             .frame(width: 15, height: 15).background(on ? Color.white : Theme.ring, in: Circle())
                     }
                 }
+                if let d = store.descriptions[ws] {
+                    Text(d).font(.system(size: 11.5)).opacity(0.95).lineLimit(3).multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Text(needs.first?.message ?? (counts.isEmpty ? path : "\(path) · \(counts)"))
                     .font(.system(size: 10.5)).opacity(0.85).lineLimit(needs.isEmpty ? 1 : 2).truncationMode(.head)
                     .multilineTextAlignment(.leading)
@@ -114,6 +117,8 @@ struct WorkspaceTab: View {
         .buttonStyle(.plain).help(WS.folder(ws).isEmpty ? "A workspace without a folder: terminals start in your home folder" : ws)
         .contextMenu {
             Button("Rename…") { store.renaming = ws }
+            Button(store.descriptions[ws] == nil ? "Add description…" : "Edit description…") { store.describing = ws }
+            if store.descriptions[ws] != nil { Button("Remove description") { store.describe(ws, "") } }
             if !WS.folder(ws).isEmpty { Button("Reveal in Finder") { NSWorkspace.shared.open(URL(fileURLWithPath: ws)) } }
             Button("Delete workspace…", role: .destructive) {
                 let n = runs.count, t = terminals.count
@@ -126,35 +131,6 @@ struct WorkspaceTab: View {
                     hub.closeAll(in: ws)
                     store.forget(workspace: ws)
                 }
-            }
-        }
-    }
-}
-
-/// The terminals of the selected workspace, grouped under it.
-struct TeamSection: View {
-    @EnvironmentObject var store: Store
-    @EnvironmentObject var hub: TeamHub
-    let ws: String
-    var body: some View {
-        VStack(spacing: 2) {
-            ForEach(hub.members(in: ws)) { m in
-                Button { hub.focus(m.id) } label: {
-                    let on = hub.focused == m.id
-                    HStack(spacing: 6) {
-                        Circle().fill(Theme.agent(m.kind)).frame(width: 7, height: 7)
-                        Text(m.name).font(.system(size: 12.5, weight: on ? .bold : .medium)).foregroundStyle(on ? Theme.green : Theme.text)
-                        Spacer()
-                        if hub.ringing.contains(m.id) { Image(systemName: "bell.fill").font(.system(size: 9)).foregroundStyle(Theme.ring) }
-                        if hub.exited.contains(m.id) { Text("exited").font(.system(size: 9.5)).foregroundStyle(Theme.dim) }
-                    }
-                    .padding(.leading, 22).padding(.trailing, 10).padding(.vertical, 5)
-                    .background(on ? Theme.rowSelected : .clear, in: RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(hub.ringing.contains(m.id) ? Theme.ring : .clear, lineWidth: 1.5))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .contextMenu { Button("Close terminal", role: .destructive) { hub.close(m.id) } }
             }
         }
     }

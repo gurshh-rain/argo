@@ -16,9 +16,9 @@ struct Inspector: View {
             .padding(.horizontal, 8).frame(height: 30)
             HLine()
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 18) {
                     if tab == "Record" { record } else { report }
-                }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                }.padding(.horizontal, 12).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .background(Theme.pane)
@@ -27,29 +27,34 @@ struct Inspector: View {
     @ViewBuilder var record: some View {
         section("Goal") { body(run.goal) }
         section("Constraints") { bullets(run.constraints, empty: "none stated") }
-        section("Follow-ups") { bullets(run.followups.map { "[\($0.source)] \($0.text)" }, empty: "none") }
+        section("Follow-ups") {
+            if run.followups.isEmpty { muted("None") }
+            ForEach(run.followups, id: \.self) { f in attributed(f.source.replacingOccurrences(of: "-", with: " ").capitalized, Theme.dim, f.text) }
+        }
         section("Decisions") {
-            if run.decisions.isEmpty { body("none yet").opacity(0.6) }
-            ForEach(run.decisions, id: \.self) { d in
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(d.by).font(.system(size: 9.5)).foregroundStyle(Theme.agent(d.by.components(separatedBy: "/").first))
-                    body(d.text)
+            if run.decisions.isEmpty { muted("None yet") }
+            // one label per author, their notes as a list beneath it (headings in a notes file are not decisions)
+            let authors = run.decisions.reduce(into: [String]()) { if !$0.contains($1.by) { $0.append($1.by) } }
+            ForEach(authors, id: \.self) { by in
+                let parts = by.components(separatedBy: "/")
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(([store.agent(parts.first)?.label ?? parts.first?.capitalized ?? ""] + parts.dropFirst()).joined(separator: " · "))
+                        .font(.system(size: 10.5, weight: .medium)).foregroundStyle(Theme.agent(parts.first))
+                    bullets(run.decisions.filter { $0.by == by && !$0.text.hasPrefix("#") }.map(\.text), empty: "None")
                 }
             }
         }
         section("Who did what") {
             ForEach(run.tasks) { t in
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         StatusDot(status: t.status)
-                        Text("\(t.id) \(t.title)").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.text).lineLimit(1)
+                        Text(t.title).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text).lineLimit(2)
                     }
                     let a = t.effective
-                    Text("\(store.agent(a.agent)?.label ?? "?") · \((a.model ?? "").isEmpty ? "cli default" : a.model!) · \(a.reasoning ?? "")\(t.difficulty.map { " · \($0)" } ?? "")\(t.override != nil ? " · override" : "")")
-                        .font(.system(size: 10)).foregroundStyle(Theme.agent(a.agent))
-                    if !t.changedFiles.isEmpty {
-                        Text(t.changedFiles.joined(separator: "\n")).font(.system(size: 10)).foregroundStyle(Theme.dim)
-                    }
+                    Text("\(store.agent(a.agent)?.label ?? "?") · \((a.model ?? "").isEmpty ? "default model" : a.model!)\(t.difficulty.map { " · \($0)" } ?? "")\(t.override != nil ? " · your choice" : "")")
+                        .font(.system(size: 11)).foregroundStyle(Theme.agent(a.agent)).padding(.leading, 13)
+                    if !t.changedFiles.isEmpty { fileList(t.changedFiles).padding(.leading, 13) }
                 }
             }
         }
@@ -58,10 +63,10 @@ struct Inspector: View {
     @ViewBuilder var report: some View {
         if let r = run.report {
             if let a = r.answer, !a.isEmpty { section("Answer") { body(a) } }
-            section("Completed") { bullets(r.completed, empty: "nothing", color: Theme.green) }
-            section("Needs attention") { bullets(r.attention, empty: "nothing", color: Theme.amber) }
+            section("Completed") { bullets(r.completed, empty: "Nothing", color: Theme.green) }
+            section("Needs attention") { bullets(r.attention, empty: "Nothing", color: Theme.amber) }
             section("Checks") {
-                if r.checks.isEmpty { body("No checks were configured or detected.").opacity(0.6) }
+                if r.checks.isEmpty { muted("No checks were configured or detected.") }
                 ForEach(r.checks, id: \.self) { c in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 5) {
@@ -74,31 +79,46 @@ struct Inspector: View {
                 }
             }
             section("Reviewed by") { body(r.reviewedBy ?? "-") }
-            section("Changed files (\(r.changedFiles.count))") {
-                Text(r.changedFiles.joined(separator: "\n")).font(.system(size: 10.5)).foregroundStyle(Theme.dim).textSelection(.enabled)
-            }
+            if !r.changedFiles.isEmpty { section("Changed files (\(r.changedFiles.count))") { fileList(r.changedFiles) } }
         } else if let e = run.error {
             section("Problem") { body(e) }
         } else {
-            body("The report appears once every subtask is merged, checks have run and the review is in.").opacity(0.6)
+            muted("The report appears once every subtask has finished and the review is in.")
         }
     }
 
     func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title.uppercased()).font(.system(size: 9.5, weight: .semibold)).kerning(0.6).foregroundStyle(Theme.dim)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.dim)
             content()
         }
     }
-    func body(_ s: String) -> some View {
-        Text(s).font(.system(size: 11.5)).foregroundStyle(Theme.text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+    func body(_ s: String) -> some View { Prose(text: s) }
+    func muted(_ s: String) -> some View { Text(s).font(.system(size: 12)).foregroundStyle(Theme.dim) }
+    /// A short label (who said it) above the text it belongs to.
+    func attributed(_ label: String, _ color: Color, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.system(size: 10.5, weight: .medium)).foregroundStyle(color)
+            Prose(text: text)
+        }
+    }
+    /// File paths, one per line, with the folder dimmed so the file name stands out.
+    func fileList(_ files: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(files, id: \.self) { f in
+                let name = (f as NSString).lastPathComponent
+                let dir = String(f.dropLast(name.count))
+                (Text(dir).foregroundColor(Theme.dim) + Text(name).foregroundColor(Theme.text))
+                    .font(.system(size: 11.5)).lineLimit(1).truncationMode(.head).textSelection(.enabled)
+            }
+        }
     }
     @ViewBuilder func bullets(_ items: [String], empty: String, color: Color = Theme.dim) -> some View {
-        if items.isEmpty { body(empty).opacity(0.6) }
+        if items.isEmpty { muted(empty) }
         ForEach(items, id: \.self) { i in
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Circle().fill(color).frame(width: 4, height: 4).offset(y: -2)
-                body(i)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Circle().fill(color).frame(width: 5, height: 5).offset(y: -1.5)
+                Prose(text: i)
             }
         }
     }
