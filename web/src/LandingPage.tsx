@@ -1,23 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ProductMedia } from './ProductMedia'
+import { AsciiCrew } from './AsciiCrew'
+import { AsciiWordmark } from './AsciiArt'
 import { landingMedia } from './landingMedia'
 import { Brand, Icon, ThemeToggle } from './ui'
-import type { IconName } from './ui'
 import './app.css'
+import './landing.css'
 
 const repository = 'https://github.com/gurshh-rain/yc-hacky'
 // Direct link to the DMG attached to the latest GitHub release. The file name is what mac/package.sh
 // produces (Argo-<version>-<arch>.dmg); update it when you publish a new version.
 const dmgUrl = `${repository}/releases/latest/download/Argo-0.1.4-arm64.dmg`
 
-type Feature = { icon: IconName; title: string; description: string; span: string; shot: string; alt: string; focus?: string }
+type Feature = { title: string; description: string; span: string; shot: string; alt: string; focus?: string }
 const features: Feature[] = [
-  { icon: 'layers', title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4', shot: '/media/app/workspaces.jpg', alt: 'Argo sidebar with workspaces, and the Worktree and Add member controls', focus: 'left top' },
-  { icon: 'swap', title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
-  { icon: 'shield', title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2', shot: '/media/app/report.jpg', alt: 'The orchestrator report listing what is complete and what needs attention', focus: 'left top' },
-  { icon: 'terminal', title: 'Steer it as it runs.', description: 'Send a follow-up to a running task, or start a new one, from the same composer.', span: 'cv-span-2', shot: '/media/app/composer.jpg', alt: 'The task composer', focus: 'left bottom' },
-  { icon: 'activity', title: 'Know when they need you.', description: 'A blocked agent, a failure or a finished run raises a notification ring and a macOS notification.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin', focus: 'left center' },
+  { title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4', shot: '/media/app/workspaces.jpg', alt: 'Argo sidebar with workspaces, and the Worktree and Add member controls', focus: 'left top' },
+  { title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
+  { title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2', shot: '/media/app/report.jpg', alt: 'The orchestrator report listing what is complete and what needs attention', focus: 'left top' },
+  { title: 'Steer it as it runs.', description: 'Send a follow-up to a running task, or start a new one, from the same composer.', span: 'cv-span-2', shot: '/media/app/composer.jpg', alt: 'The task composer', focus: 'left bottom' },
+  { title: 'Know when they need you.', description: 'A blocked agent, a failure or a finished run raises a notification ring and a macOS notification.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin', focus: 'left center' },
 ]
 
 function MacIcon() {
@@ -30,10 +32,17 @@ function GitHubIcon() {
 
 function CopyCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false)
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (resetTimer.current) clearTimeout(resetTimer.current) }, [])
   const copy = async () => {
-    try { await navigator.clipboard.writeText(command); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* Clipboard is optional. */ }
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      if (resetTimer.current) clearTimeout(resetTimer.current)
+      resetTimer.current = setTimeout(() => setCopied(false), 1500)
+    } catch { /* Clipboard is optional. */ }
   }
-  return <div className="cv-code"><code>{command}</code><button type="button" onClick={copy} aria-label="Copy command"><Icon name={copied ? 'check' : 'code'} width="15" height="15" /></button></div>
+  return <div className="cv-code"><span className="cv-code-prompt" aria-hidden="true">$</span><code>{command}</code><button className="du-btn du-btn-ghost du-btn-square" type="button" onClick={copy} aria-label={copied ? 'Command copied' : 'Copy command'}><Icon name={copied ? 'check' : 'code'} width="17" height="17" /></button><span className="sr-only" role="status">{copied ? 'Command copied to clipboard' : ''}</span></div>
 }
 
 export function LandingPage() {
@@ -41,57 +50,81 @@ export function LandingPage() {
     <div className="cv">
       <a className="skip-link" href="#main">Skip to content</a>
       <div className="cv-column">
-        <header className="cv-header">
+        <header className="du-navbar cv-header">
           <Link to="/" aria-label="Argo home"><Brand /></Link>
           <nav aria-label="Main navigation">
+            <a href="#features" className="cv-nav-link">Features</a>
+            <a href="#app" className="cv-nav-link">The app</a>
             <a href={repository} target="_blank" rel="noreferrer" className="cv-icon-link" aria-label="Argo on GitHub"><GitHubIcon /></a>
             <ThemeToggle />
-            <a href={dmgUrl} className="cv-pill">Download</a>
+            <a href={dmgUrl} className="du-btn du-btn-sm cv-nav-download">Download</a>
           </nav>
         </header>
 
         <main id="main">
           <section className="cv-hero cv-section">
-            <h1>Your coding crew.<br />Right at home on Mac.</h1>
-            <p>Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac, and check in from anywhere.</p>
-            <div className="cv-hero-actions"><a href={dmgUrl} className="cv-pill cv-pill-lg">Download for Mac</a></div>
-            <div className="cv-film" id="film"><ProductMedia media={landingMedia.hero} /></div>
+            <div className="cv-hero-layout">
+              <div className="cv-hero-copy">
+                <p className="cv-terminal-label"><span aria-hidden="true">~/</span> argo</p>
+                <h1>Your coding crew.<br /><span>Right at home on Mac.</span></h1>
+                <p className="cv-hero-description">Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac, and check in from anywhere.</p>
+                <div className="cv-hero-actions">
+                  <a href={dmgUrl} className="du-btn du-btn-primary du-btn-lg cv-download"><MacIcon />Download for Mac</a>
+                  <a href="#film" className="du-btn du-btn-ghost cv-watch"><Icon name="play" width="17" height="17" />Watch the film</a>
+                </div>
+                <p className="cv-requirements">macOS 14+<span aria-hidden="true">·</span>Apple silicon</p>
+              </div>
+              <div className="cv-hero-art"><div className="cv-art-header" aria-hidden="true"><span>[ the crew ]</span><span>+ - +</span></div><AsciiCrew className="cv-ascii-hero" /></div>
+            </div>
+            <div className="cv-film" id="film"><div className="cv-media-rail" aria-hidden="true"><span>~/argo/product-film</span><span>[ play ]</span></div><ProductMedia media={landingMedia.hero} /></div>
+            <div className="cv-compatible" aria-label="Works with Claude Code, Codex and Devin">
+              <p>Your favorite agents. One shared workspace.</p>
+              <div><span><Icon name="spark" width="19" height="19" />Claude Code</span><span><Icon name="code" width="20" height="20" />Codex</span><span><Icon name="terminal" width="19" height="19" />Devin</span></div>
+            </div>
           </section>
 
           <section className="cv-section" id="features" aria-labelledby="features-title">
-            <p className="cv-eyebrow">Features</p>
+            <p className="cv-eyebrow">[ Features ]</p>
             <h2 id="features-title">Everything you need to run a crew of agents.</h2>
             <div className="cv-grid">
               {features.map((f) => (
-                <article key={f.title} className={`cv-card ${f.span}`}>
-                  <span className="cv-card-icon"><Icon name={f.icon} width="22" height="22" /></span>
-                  <h3>{f.title}</h3>
+                <article key={f.title} className={`du-card cv-card ${f.span}`}>
+                  <h3 className="du-card-title">{f.title}</h3>
                   <p>{f.description}</p>
-                  <div className="cv-shot"><img src={f.shot} alt={f.alt} loading="lazy" decoding="async" style={{ objectPosition: f.focus }} /></div>
+                  <div className="cv-feature-visual">
+                    <figure className="cv-shot"><img src={f.shot} alt={f.alt} loading="lazy" decoding="async" style={{ objectPosition: f.focus }} /></figure>
+                  </div>
                 </article>
               ))}
             </div>
           </section>
 
-          <section className="cv-section" id="app" aria-labelledby="app-title">
-            <p className="cv-eyebrow">The app</p>
+          <section className="cv-section cv-app-section" id="app" aria-labelledby="app-title">
+            <p className="cv-eyebrow">[ The app ]</p>
             <h2 id="app-title">Your whole crew, in one window.</h2>
-            <div className="cv-window cv-window-section">
-              <div className="cv-window-bar" aria-hidden="true"><span /><span /><span /></div>
-              <img src="/media/app/app.jpg" alt="Argo on Mac: workspaces in the sidebar, an agent's subtask output, and the orchestrator's report" width="1600" height="1263" />
+            <p className="cv-section-description">A little less switching. A lot more getting things done.</p>
+            <div className="cv-preview-stage">
+              <pre className="cv-ascii-backplane" aria-hidden="true">{Array.from({ length: 22 }, (_, row) => Array.from({ length: 110 }, (_, col) => (row % 5 === 0 && col % 10 === 0) ? '+' : (row % 5 === 0 ? '-' : (col % 10 === 0 ? ':' : ' '))).join('')).join('\n')}</pre>
+              <div className="cv-window cv-window-section">
+                <div className="cv-window-bar" aria-hidden="true"><div><span>o</span><span>o</span><span>o</span></div><span className="cv-window-title">~/argo/workspace</span><span>[ macOS ]</span></div>
+                <img src="/media/app/app.jpg" alt="Argo on Mac: workspaces in the sidebar, an agent's subtask output, and the orchestrator's report" width="1600" height="1263" loading="lazy" decoding="async" />
+              </div>
             </div>
           </section>
 
           <section className="cv-section" id="download" aria-labelledby="download-title">
+            <p className="cv-eyebrow">[ Get Argo ]</p>
             <h2 id="download-title">Runs wherever you work.</h2>
             <div className="cv-grid cv-where">
-              <article className="cv-card cv-span-3">
-                <h3>Mac</h3>
+              <article className="du-card cv-card cv-span-3">
+                <div className="cv-install-heading"><span className="cv-install-symbol" aria-hidden="true">{'[ macOS ]'}</span><span className="du-badge cv-platform">Apple silicon</span></div>
+                <h3 className="du-card-title">Mac</h3>
                 <p>Native SwiftUI app with a tab per run, split agent panes and notification rings.</p>
-                <a href={dmgUrl} className="cv-pill cv-pill-block"><MacIcon />Download the DMG</a>
+                <a href={dmgUrl} className="du-btn cv-pill-block"><MacIcon />Download the DMG</a>
               </article>
-              <article className="cv-card cv-span-3">
-                <h3>From source</h3>
+              <article className="du-card cv-card cv-span-3">
+                <div className="cv-install-heading"><span className="cv-install-symbol" aria-hidden="true">{'[ >_ ]'}</span><span className="du-badge cv-platform">Build it yourself</span></div>
+                <h3 className="du-card-title">From source</h3>
                 <p>Needs macOS 14, Node 24 and one coding agent CLI.</p>
                 <CopyCommand command="mac/build.sh" />
               </article>
@@ -100,12 +133,13 @@ export function LandingPage() {
         </main>
 
         <footer className="cv-footer">
+          <AsciiWordmark />
           <div className="cv-footer-top">
             <div><Brand /><p>A home for your coding crew.</p></div>
             <div><h4>Product</h4><a href="#features">Features</a><a href="#film">Product film</a><a href={dmgUrl}>Download for Mac</a></div>
             <div><h4>Resources</h4><a href={repository} target="_blank" rel="noreferrer">GitHub</a><a href={`${repository}#run-it`} target="_blank" rel="noreferrer">Setup guide</a><a href="https://wasp.sh/" target="_blank" rel="noreferrer">Built with Wasp</a></div>
           </div>
-          <p className="cv-legal">© 2026 Argo</p>
+          <div className="cv-footer-bottom"><p className="cv-legal">© 2026 Argo</p><span>Built for the way you build.</span></div>
         </footer>
       </div>
     </div>
