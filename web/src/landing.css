@@ -159,6 +159,7 @@
 .cv-window-bar > div span { color: #b0b0b0; }
 .cv-window-title { position: absolute; left: 50%; transform: translateX(-50%); font: .75rem var(--cv-mono); }
 .cv-window img { display: block; width: 100%; height: auto; }
+.cv-laptop { position: relative; z-index: 1; display: block; width: min(100%, 1020px); height: auto; margin: 32px auto 0; filter: drop-shadow(0 28px 40px var(--cv-shadow)); }
 .cv-where .cv-card { gap: 12px; padding: 28px; }
 .cv-install-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
 .cv-platform { height: 27px; padding-inline: 10px; border: 1px solid var(--cv-line); border-radius: 3px; background: transparent; color: var(--cv-muted); font: .75rem var(--cv-mono); }

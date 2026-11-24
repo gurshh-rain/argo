@@ -22,7 +22,7 @@ const onWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.
 type Feature = { title: string; description: string; span: string; shot: string; alt: string; focus?: string; device?: boolean }
 const features: Feature[] = [
   { title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4', shot: '/media/app/workspaces.jpg', alt: 'Argo sidebar with workspaces, and the Worktree and Add member controls', focus: 'left top' },
-  { title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
+  { title: 'The right agent for the job.', description: 'Each subtask goes to the agent and model best suited to it, with no prompt from you. Override any choice in one click.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
   { title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2', shot: '/media/app/report.jpg', alt: 'The orchestrator report listing what is complete and what needs attention', focus: 'left top' },
   { title: 'Connect local models.', description: 'Run open models through Ollama on your own machine, right alongside the cloud agents. Your code stays on your machine.', span: 'cv-span-2', shot: '/media/mac-mini.png', alt: 'A Mac mini, front view', device: true },
   { title: 'Know when they need you.', description: 'A blocked agent, a failure or a finished run raises a notification ring and a system notification.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin', focus: 'left center' },
@@ -112,8 +112,8 @@ export function LandingPage() {
           <section className="cv-hero cv-section">
             <div className="cv-hero-layout">
               <div className="cv-hero-copy">
-                <h1>Your coding crew.<br /><span>Right at home on Mac and Windows.</span></h1>
-                <p className="cv-hero-description">Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac or PC, and check in from anywhere.</p>
+                <h1>Orchestrate your coding agents.</h1>
+                <p className="cv-hero-description">Describe the task once and Argo divides it into subtasks and hands each one to Claude Code, Codex or Devin, so you never have to prompt them one by one.</p>
                 <div className="cv-hero-actions">
                   {onWindows
                     ? <><a href={winUrl} className="du-btn du-btn-primary du-btn-lg cv-download"><WindowsIcon />Download for Windows</a><a href={dmgUrl} className="du-btn du-btn-ghost cv-watch"><MacIcon />Mac</a></>
@@ -162,10 +162,7 @@ export function LandingPage() {
             <p className="cv-section-description">A little less switching. A lot more getting things done.</p>
             <div className="cv-preview-stage">
               <pre className="cv-ascii-backplane" aria-hidden="true">{Array.from({ length: 22 }, (_, row) => Array.from({ length: 110 }, (_, col) => (row % 5 === 0 && col % 10 === 0) ? '+' : (row % 5 === 0 ? '-' : (col % 10 === 0 ? ':' : ' '))).join('')).join('\n')}</pre>
-              <div className="cv-window cv-window-section">
-                <div className="cv-window-bar" aria-hidden="true"><div><span>o</span><span>o</span><span>o</span></div><span className="cv-window-title">~/argo/workspace</span><span>[ macOS ]</span></div>
-                <img src="/media/app/app.jpg" alt="Argo on Mac: workspaces in the sidebar, an agent's subtask output, and the orchestrator's report" width="1600" height="1263" loading="lazy" decoding="async" />
-              </div>
+              <img className="cv-laptop" src="/media/laptop_img.png" alt="Argo on a laptop: workspaces in the sidebar, four agent terminals side by side, and the project's files" width="2036" height="1258" loading="lazy" decoding="async" />
             </div>
           </section>
 
