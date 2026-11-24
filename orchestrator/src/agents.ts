@@ -303,10 +303,17 @@ export function runAgent(o: RunOpts): Promise<RunResult> {
     try {
       // on Windows the CLIs are .cmd shims, which only start through a shell; arguments are quoted for it
       child = WIN
-        ? spawn([bin, ...args].map(winQuote).join(' '), { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1', ...env }, signal: o.signal, shell: true, windowsHide: true })
+        ? spawn([bin, ...args].map(winQuote).join(' '), { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1', ...env }, shell: true, windowsHide: true })
         : spawn(bin, args, { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1', ...env }, signal: o.signal })
     } catch (err) {
       return resolve({ ...out, error: String(err) })
+    }
+    // Windows: killing the shell would leave the CLI it started running, so a cancel takes down the whole tree
+    if (WIN) {
+      const pid = child.pid
+      const stop = () => pid && spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {})
+      if (o.signal?.aborted) stop()
+      else o.signal?.addEventListener('abort', stop, { once: true })
     }
     let last = Date.now()
     let warned = false
@@ -330,6 +337,7 @@ export function runAgent(o: RunOpts): Promise<RunResult> {
     })
     child.on('close', (code) => {
       clearInterval(watchdog)
+      if (WIN && o.signal?.aborted) return resolve({ ...out, ok: false, error: 'cancelled' })
       if (buf.trim()) parse(buf)
       const lastFile = join(tmp, 'last.txt')
       if (existsSync(lastFile)) out.text = readFileSync(lastFile, 'utf8') || out.text

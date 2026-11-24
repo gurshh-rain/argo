@@ -77,7 +77,8 @@ function updateSettings(patch: Partial<Settings>) {
     if (!['low', 'medium', 'high'].includes(patch.reasoning)) throw new HttpError(400, 'Unknown reasoning level')
     s.reasoning = patch.reasoning
   }
-  if (patch.models) for (const [k, v] of Object.entries(patch.models)) if (ids.includes(k)) s.models[k] = String(v)
+  // the pinned models are replaced as a whole, so leaving an agent out un-pins its model
+  if (patch.models) s.models = Object.fromEntries(Object.entries(patch.models).filter(([k]) => ids.includes(k)).map(([k, v]) => [k, String(v)]))
   if (patch.autoApprove !== undefined) s.autoApprove = !!patch.autoApprove
   if (patch.maxParallel !== undefined) s.maxParallel = Math.max(1, Math.min(8, Number(patch.maxParallel) || 3))
   if (patch.checks !== undefined) s.checks = (patch.checks as string[]).map(String).filter(Boolean)

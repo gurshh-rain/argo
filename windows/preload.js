@@ -1,4 +1,5 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
+const on = (channel) => (fn) => ipcRenderer.on(channel, (_e, ...args) => fn(...args))
 contextBridge.exposeInMainWorld('argo', {
   api: (method, route, body) => ipcRenderer.invoke('api', method, route, body),
   ensure: () => ipcRenderer.invoke('ensure'),
@@ -7,13 +8,31 @@ contextBridge.exposeInMainWorld('argo', {
   listDir: (dir) => ipcRenderer.invoke('listDir', dir),
   open: (p) => ipcRenderer.invoke('open', p),
   reveal: (p) => ipcRenderer.invoke('reveal', p),
+  openExternal: (url) => ipcRenderer.invoke('openExternal', url),
+  copy: (text) => ipcRenderer.send('copy', text),
+  paste: () => ipcRenderer.invoke('paste'),
+  qr: (text) => ipcRenderer.invoke('qr', text),
+  pickFiles: () => ipcRenderer.invoke('pickFiles'),
+  attach: (files) => ipcRenderer.invoke('attach', files),
+  pathOf: (file) => webUtils.getPathForFile(file),
+  notify: (title, body) => ipcRenderer.send('notify', title, body),
+  tray: (summary) => ipcRenderer.send('tray', summary),
+  quit: () => ipcRenderer.send('quit'),
   pty: {
     create: (o) => ipcRenderer.invoke('pty:create', o),
     write: (id, data) => ipcRenderer.send('pty:write', id, data),
     resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
     kill: (id) => ipcRenderer.send('pty:kill', id),
-    onData: (fn) => ipcRenderer.on('pty:data', (_e, id, data) => fn(id, data)),
-    onExit: (fn) => ipcRenderer.on('pty:exit', (_e, id) => fn(id)),
+    onData: on('pty:data'),
+    onExit: on('pty:exit'),
   },
-  onMail: (fn) => ipcRenderer.on('mail', (_e, id, from, text) => fn(id, from, text)),
+  update: {
+    state: () => ipcRenderer.invoke('update:state'),
+    check: () => ipcRenderer.send('update:check'),
+    install: () => ipcRenderer.send('update:install'),
+    onState: on('update'),
+  },
+  onMail: on('mail'),
+  onCLI: on('cli'),
+  onCommand: on('command'),
 })

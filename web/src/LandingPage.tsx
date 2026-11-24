@@ -14,18 +14,26 @@ const repository = 'https://github.com/gurshh-rain/yc-hacky'
 // GitHub redirects releases/latest/download/<file> to that file in the newest release, so this link
 // always serves the latest DMG. mac/package.sh writes it as Argo.dmg; attach it to every release.
 const dmgUrl = `${repository}/releases/latest/download/Argo.dmg`
+// The Windows build, attached to the same release by windows/package.mjs.
+const winUrl = `${repository}/releases/latest/download/Argo-win32-x64.zip`
+// Visitors on Windows are offered the Windows build first.
+const onWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
 
 type Feature = { title: string; description: string; span: string; shot: string; alt: string; focus?: string; device?: boolean }
 const features: Feature[] = [
   { title: 'A worktree for every task.', description: 'Independent agents work in parallel, each in its own git worktree. Your main checkout stays out of the crossfire.', span: 'cv-span-4', shot: '/media/app/workspaces.jpg', alt: 'Argo sidebar with workspaces, and the Worktree and Add member controls', focus: 'left top' },
   { title: 'The right agent for the job.', description: 'Let Argo route the work, or pick the agent, model and reasoning level yourself.', span: 'cv-span-2', shot: '/media/app/agent.jpg', alt: 'A subtask pane labelled Claude Code, haiku, low reasoning, chosen automatically', focus: 'right top' },
   { title: 'Your code. Your final say.', description: 'Changes merge into an integration branch, pass checks and an independent review, then wait for you.', span: 'cv-span-2', shot: '/media/app/report.jpg', alt: 'The orchestrator report listing what is complete and what needs attention', focus: 'left top' },
-  { title: 'Connect local models.', description: 'Run open models through Ollama on your own Mac, right alongside the cloud agents. Your code stays on your machine.', span: 'cv-span-2', shot: '/media/mac-mini.png', alt: 'A Mac mini, front view', device: true },
-  { title: 'Know when they need you.', description: 'A blocked agent, a failure or a finished run raises a notification ring and a macOS notification.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin', focus: 'left center' },
+  { title: 'Connect local models.', description: 'Run open models through Ollama on your own machine, right alongside the cloud agents. Your code stays on your machine.', span: 'cv-span-2', shot: '/media/mac-mini.png', alt: 'A Mac mini, front view', device: true },
+  { title: 'Know when they need you.', description: 'A blocked agent, a failure or a finished run raises a notification ring and a system notification.', span: 'cv-span-2', shot: '/media/app/status.jpg', alt: 'Agent status for Claude Code, Codex and Devin', focus: 'left center' },
 ]
 
 function MacIcon() {
   return <svg width="17" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.1 12.3c0-2 1.6-3 1.7-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.2.8-.6 0-1.6-.8-2.7-.8-1.4 0-2.7.8-3.4 2-1.4 2.5-.4 6.2 1 8.2.6 1 1.4 2 2.4 2 1 0 1.4-.6 2.7-.6 1.3 0 1.6.6 2.7.6s1.7-1 2.4-2c.8-1.1 1.1-2.2 1.1-2.3-.1 0-2.1-.8-2.1-3.2ZM15 6.3c.5-.7.9-1.6.8-2.5-.8 0-1.8.6-2.4 1.2-.5.6-1 1.5-.9 2.4.9.1 1.9-.5 2.5-1.1Z" /></svg>
+}
+
+function WindowsIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8.5v8.5H3zM12.5 3H21v8.5h-8.5zM3 12.5h8.5V21H3zM12.5 12.5H21V21h-8.5z" /></svg>
 }
 
 function GitHubIcon() {
@@ -95,7 +103,7 @@ export function LandingPage() {
               <a href="#app" className="cv-nav-link">The app</a>
               <a href={repository} target="_blank" rel="noreferrer" className="cv-icon-link" aria-label="Argo on GitHub"><GitHubIcon /></a>
               <ThemeToggle />
-              <a href={dmgUrl} className="du-btn du-btn-sm cv-nav-download">Download</a>
+              <a href={onWindows ? winUrl : dmgUrl} className="du-btn du-btn-sm cv-nav-download">Download</a>
             </nav>
           </div>
         </header>
@@ -104,13 +112,15 @@ export function LandingPage() {
           <section className="cv-hero cv-section">
             <div className="cv-hero-layout">
               <div className="cv-hero-copy">
-                <h1>Your coding crew.<br /><span>Right at home on Mac.</span></h1>
-                <p className="cv-hero-description">Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac, and check in from anywhere.</p>
+                <h1>Your coding crew.<br /><span>Right at home on Mac and Windows.</span></h1>
+                <p className="cv-hero-description">Run Claude Code, Codex and Devin side by side, each in its own worktree, on your Mac or PC, and check in from anywhere.</p>
                 <div className="cv-hero-actions">
-                  <a href={dmgUrl} className="du-btn du-btn-primary du-btn-lg cv-download"><MacIcon />Download for Mac</a>
+                  {onWindows
+                    ? <><a href={winUrl} className="du-btn du-btn-primary du-btn-lg cv-download"><WindowsIcon />Download for Windows</a><a href={dmgUrl} className="du-btn du-btn-ghost cv-watch"><MacIcon />Mac</a></>
+                    : <><a href={dmgUrl} className="du-btn du-btn-primary du-btn-lg cv-download"><MacIcon />Download for Mac</a><a href={winUrl} className="du-btn du-btn-ghost cv-watch"><WindowsIcon />Windows</a></>}
                   <a href="#film" className="du-btn du-btn-ghost cv-watch"><Icon name="play" width="17" height="17" />Watch the film</a>
                 </div>
-                <p className="cv-requirements">macOS 14+<span aria-hidden="true">·</span>Apple silicon</p>
+                <p className="cv-requirements">macOS 14+ on Apple silicon<span aria-hidden="true">·</span>Windows 10+ on x64</p>
               </div>
               <div className="cv-hero-art"><AsciiCrew className="cv-ascii-hero" /></div>
             </div>
@@ -163,16 +173,22 @@ export function LandingPage() {
             <p className="cv-eyebrow">[ Get Argo ]</p>
             <h2 id="download-title">Runs wherever you work.</h2>
             <div className="cv-grid cv-where">
-              <article className="du-card cv-card cv-span-3">
+              <article className="du-card cv-card cv-span-2">
                 <div className="cv-install-heading"><span className="cv-install-symbol" aria-hidden="true">{'[ macOS ]'}</span><span className="du-badge cv-platform">Apple silicon</span></div>
                 <h3 className="du-card-title">Mac</h3>
                 <p>Native SwiftUI app with a tab per run, split agent panes and notification rings.</p>
                 <a href={dmgUrl} className="du-btn cv-pill-block"><MacIcon />Download the DMG</a>
               </article>
-              <article className="du-card cv-card cv-span-3">
+              <article className="du-card cv-card cv-span-2">
+                <div className="cv-install-heading"><span className="cv-install-symbol" aria-hidden="true">{'[ Windows ]'}</span><span className="du-badge cv-platform">x64</span></div>
+                <h3 className="du-card-title">Windows</h3>
+                <p>The same workspace on Windows 10 and 11. Unzip it and open Argo.exe; it is not signed yet, so SmartScreen asks once.</p>
+                <a href={winUrl} className="du-btn cv-pill-block"><WindowsIcon />Download the zip</a>
+              </article>
+              <article className="du-card cv-card cv-span-2">
                 <div className="cv-install-heading"><span className="cv-install-symbol" aria-hidden="true">{'[ >_ ]'}</span><span className="du-badge cv-platform">Build it yourself</span></div>
                 <h3 className="du-card-title">From source</h3>
-                <p>Needs macOS 14, Node 24 and one coding agent CLI.</p>
+                <p>Needs Node 24 and one coding agent CLI. On Windows, run npm install and npm start in the windows folder.</p>
                 <CopyCommand command="mac/build.sh" />
               </article>
             </div>
@@ -183,7 +199,7 @@ export function LandingPage() {
           <AsciiWordmark />
           <div className="cv-footer-top">
             <div><Brand /><p>A home for your coding crew.</p></div>
-            <div><h4>Product</h4><a href="#features">Features</a><a href="#film">Product film</a><a href={dmgUrl}>Download for Mac</a></div>
+            <div><h4>Product</h4><a href="#features">Features</a><a href="#film">Product film</a><a href={dmgUrl}>Download for Mac</a><a href={winUrl}>Download for Windows</a></div>
             <div><h4>Resources</h4><a href={repository} target="_blank" rel="noreferrer">GitHub</a><a href={`${repository}#run-it`} target="_blank" rel="noreferrer">Setup guide</a></div>
           </div>
           <div className="cv-footer-bottom"><p className="cv-legal">© 2026 Argo</p><span>Agentic orchestration.</span></div>

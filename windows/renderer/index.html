@@ -2,21 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
   <title>Argo</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <aside id="sidebar">
-    <div class="toolbar">
-      <button id="newTermBtn" class="icon" title="New terminal">+</button>
-      <button id="openFolderBtn" class="icon" title="Open folder as workspace">▤</button>
-    </div>
+    <div id="sidetools" class="toolbar"></div>
     <div id="workspaces"></div>
     <div class="side-foot">
       <div id="agents"></div>
-      <div class="row"><button id="settingsBtn" class="btn">Settings</button><span id="version" class="dim"></span></div>
+      <div id="update"></div>
+      <div class="row"><button id="settingsBtn" class="btn"></button><button id="phoneBtn" class="btn"></button></div>
     </div>
   </aside>
   <main>
@@ -27,14 +25,20 @@
     <div id="stage"></div>
     <div id="approve"></div>
     <footer id="composer">
-      <div id="mode" class="seg"></div>
-      <span class="chev">❯</span>
-      <textarea id="prompt" rows="1" placeholder="Ask anything or describe a task…"></textarea>
-      <button id="send" title="Send (Enter)">↑</button>
+      <div id="attachments"></div>
+      <div class="row">
+        <div id="mode" class="seg"></div>
+        <span class="chev">❯</span>
+        <textarea id="prompt" rows="1" placeholder="Ask anything or describe a task…"></textarea>
+        <button id="attach" class="icon" title="Attach files (or drop them here)"></button>
+        <button id="send" title="Send (Enter)"></button>
+      </div>
     </footer>
   </main>
   <aside id="right">
     <div id="rtabs"></div>
+    <input id="filter" type="text" placeholder="Filter" spellcheck="false" hidden />
+    <div id="rhead"></div>
     <div id="rbody"></div>
   </aside>
   <div id="modal" hidden></div>

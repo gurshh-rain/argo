@@ -105,6 +105,12 @@ Mac that packages it, and needs Node 24+ and at least one coding CLI on the user
 Publish it as a GitHub release on the tag `v<version>` and attach everything in `mac/dist/`: both DMGs,
 the zip, `SHA256SUMS.txt` and `latest.json`.
 
+The Windows build goes on the same release. Set the version in `windows/package.json`, run
+`cd windows && npm run package` (see `windows/README.md` for packaging from a Mac), and attach
+`windows/dist/Argo-win32-x64.zip` and `windows/dist/latest-win.json`. The website's Windows button links to
+`releases/latest/download/Argo-win32-x64.zip`, and the Windows app updates itself from `latest-win.json`,
+signed with the same key.
+
 - The website's Download buttons link to `releases/latest/download/Argo.dmg`, which GitHub redirects to
   the `Argo.dmg` in the newest release, so the site needs no change per version.
 - The app updates itself from `releases/latest/download/latest.json`. It checks at launch and every

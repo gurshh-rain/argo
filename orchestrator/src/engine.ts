@@ -22,6 +22,8 @@ const resolve = (run: Run, taskId?: string) => {
   for (const a of attention) if (a.runId === run.id && (!taskId || a.taskId === taskId)) a.resolved = true
 }
 const log = (run: Run, line: string) => appendLog(run, 'orchestrator', line)
+// How a terminal's agent runs argo-msg. The Windows app puts it on the PATH of its terminals, where "$ARGO_MSG" would only work in sh.
+const MSG = process.platform === 'win32' ? 'argo-msg' : '"$ARGO_MSG"'
 
 // Where the orchestrator's own agents (planner, reviewer) run: the integration worktree, or the plain folder.
 const base = (run: Run) => (run.isolated ? g.mainTree(run.id) : run.project)
@@ -211,7 +213,7 @@ ${run.isolated
 - Your final message is your deliverable: give the complete result of your subtask, then note anything you could not establish.`}${resultFile ? `
 
 ## You are in a terminal the user is watching
-${run.isolated ? `- Your working directory for this subtask is ${t.worktree} (not the directory this session started in). cd there for every command and only touch files inside it.\n` : ''}- To tell another terminal's agent something directly, run: "$ARGO_MSG" "<their name>" "<message>" ("$ARGO_MSG" --list shows the names). Messages from them arrive in your prompt as [Message from <name>].\n- When you have finished, write your complete final message to ${resultFile}. Writing that file is how the orchestrator learns you are done, so do it last, and do it even if you could not finish (say why in it).` : ''}`
+${run.isolated ? `- Your working directory for this subtask is ${t.worktree} (not the directory this session started in). cd there for every command and only touch files inside it.\n` : ''}- To tell another terminal's agent something directly, run: ${MSG} "<their name>" "<message>" (${MSG} --list shows the names). Messages from them arrive in your prompt as [Message from <name>].\n- When you have finished, write your complete final message to ${resultFile}. Writing that file is how the orchestrator learns you are done, so do it last, and do it even if you could not finish (say why in it).` : ''}`
 }
 
 async function execTask(run: Run, t: Task, extra?: { instruction?: string; escalate?: boolean }) {

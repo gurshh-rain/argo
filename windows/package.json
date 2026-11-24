@@ -1,7 +1,7 @@
 {
   "name": "argo-windows",
   "productName": "Argo",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "description": "Argo for Windows: one task in, a team of coding agents on it.",
   "main": "main.js",
@@ -12,7 +12,8 @@
   "dependencies": {
     "@lydell/node-pty": "1.1.0",
     "@xterm/addon-fit": "0.11.0",
-    "@xterm/xterm": "6.0.0"
+    "@xterm/xterm": "6.0.0",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

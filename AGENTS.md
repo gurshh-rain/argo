@@ -2,5 +2,6 @@
 
 - `orchestrator/`: Node 24+ TypeScript run directly (type stripping, no build, no dependencies). Use `import type` for types and `.ts` import paths; no enums or parameter properties. Test: `cd orchestrator && npm test`.
 - `mac/`: SwiftUI via SwiftPM. Build with `mac/build.sh` (uses the macOS 26 SDK when full Xcode is absent, because the 27 SDK's `@State` macro needs Xcode's plugin). Headless UI check: `mac/build/Argo.app/Contents/MacOS/Argo --snapshot /tmp/out.png`.
+- `windows/`: Electron app for Windows (plain JS, no build step), a port of `mac/` on the same orchestrator. Keep the two apps' features in step. It runs on a Mac for checks: `cd windows && ARGO_HOME=/tmp/argo-home ARGO_PORT=4399 npx electron . --user-data-dir=/tmp/argo-ud --snapshot /tmp/out.png` (always a separate `ARGO_HOME`/`ARGO_PORT`, so the installed app's orchestrator is left alone). Windows-only paths (PowerShell/cmd launch, process scan, update swap) cannot be exercised there. Package with `npm run package`.
 - `web/`: Wasp 0.26 (TypeScript spec in `main.wasp.ts`). Verify with `cd web && wasp compile`; do not run `tsc` directly. Run with `./dev.sh` (ports 4318/4319; `REACT_APP_API_URL` is managed by Wasp, set URLs via `wasp start --server-url`).
 - Secrets live in `~/.argo/.env` and `web/.env.server`, never in the repo.
