@@ -8,6 +8,10 @@ export const HOME = process.env.ARGO_HOME || join(homedir(), '.argo')
 export const WORKTREES = join(HOME, 'worktrees')
 // scratch folders for runs started without a project (research, questions)
 export const WORKSPACES = join(HOME, 'workspaces')
+// files attached to a task in the Mac app's composer; agents may read anything in here
+export const ATTACHMENTS = join(HOME, 'attachments')
+// Extra folders an agent may read: the attachments, once any exist.
+export const sharedDirs = () => (existsSync(ATTACHMENTS) ? [ATTACHMENTS] : [])
 const CONFIG_FILE = join(HOME, 'config.json')
 const ENV_FILE = join(HOME, '.env')
 

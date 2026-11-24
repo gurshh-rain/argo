@@ -5,10 +5,15 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 // However this process was started, look where coding CLIs are normally installed.
-const have = (process.env.PATH || '').split(':')
-for (const d of [join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.npm-global/bin'), join(homedir(), '.bun/bin')])
+const win = process.platform === 'win32'
+const sep = win ? ';' : ':'
+const have = (process.env.PATH || '').split(sep)
+const usual = win
+  ? [join(homedir(), '.local', 'bin'), join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'npm'), join(homedir(), '.bun', 'bin'), join(process.env.LOCALAPPDATA || '', 'Programs', 'Ollama')]
+  : [join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.npm-global/bin'), join(homedir(), '.bun/bin')]
+for (const d of usual)
   if (!have.includes(d)) have.push(d)
-process.env.PATH = have.join(':')
+process.env.PATH = have.join(sep)
 
 // One bad run must not take the orchestrator (and every other run) down with it.
 process.on('uncaughtException', (err) => console.error(new Date().toISOString(), 'uncaught exception:', err))

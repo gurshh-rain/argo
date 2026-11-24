@@ -4,6 +4,8 @@ import { basename, join, resolve } from 'node:path'
 import { WORKTREES } from './config.ts'
 
 export function sh(cmd: string, args: string[], cwd: string, timeout = 120_000): Promise<{ ok: boolean; out: string }> {
+  // checks are run through the platform's own shell
+  if (process.platform === 'win32' && cmd === '/bin/sh') (cmd = process.env.ComSpec || 'cmd.exe'), (args = ['/d', '/s', '/c', args[1]])
   return new Promise((resolve) =>
     execFile(cmd, args, { cwd, timeout, maxBuffer: 16 << 20 }, (err, stdout, stderr) =>
       resolve({ ok: !err, out: (stdout + (stderr ? '\n' + stderr : '')).trim() }),

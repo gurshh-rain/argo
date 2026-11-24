@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentId, Assignment, Difficulty } from './types.ts'
 
+const WIN = process.platform === 'win32'
+// cmd.exe quoting: wrap in double quotes when needed and double any inner quote
+export const winQuote = (a: string) => (/^[\w.:\\/=-]+$/.test(a) ? a : `"${a.replace(/"/g, '""')}"`)
+
 export interface AgentSpec {
   id: AgentId
   label: string
@@ -107,7 +111,7 @@ export function ollamaModels(tags: any): Pick<AgentSpec, 'models' | 'tiers'> {
 function detectOllama(a: AgentSpec, haveClaude: boolean): AgentSpec {
   let version: string
   try {
-    version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0].replace(/^ollama version is /, '')
+    version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], shell: WIN }).trim().split('\n')[0].replace(/^ollama version is /, '')
   } catch {
     return { ...a, installed: false }
   }
@@ -146,7 +150,7 @@ export function agents(refresh = false): AgentSpec[] {
   ollamaChecked = Date.now()
   detected = CATALOG.filter((a) => a.id !== 'ollama').map((a) => {
     try {
-      const version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0]
+      const version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], shell: WIN }).trim().split('\n')[0]
       return { ...a, installed: true, version }
     } catch {
       return { ...a, installed: false }
@@ -297,7 +301,10 @@ export function runAgent(o: RunOpts): Promise<RunResult> {
   return new Promise((resolve) => {
     let child
     try {
-      child = spawn(bin, args, { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1', ...env }, signal: o.signal })
+      // on Windows the CLIs are .cmd shims, which only start through a shell; arguments are quoted for it
+      child = WIN
+        ? spawn([bin, ...args].map(winQuote).join(' '), { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1', ...env }, signal: o.signal, shell: true, windowsHide: true })
+        : spawn(bin, args, { cwd: o.cwd, env: { ...process.env, NO_COLOR: '1', ...env }, signal: o.signal })
     } catch (err) {
       return resolve({ ...out, error: String(err) })
     }

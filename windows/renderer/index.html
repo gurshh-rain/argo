@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Argo</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="toolbar">
+      <button id="newTermBtn" class="icon" title="New terminal">+</button>
+      <button id="openFolderBtn" class="icon" title="Open folder as workspace">▤</button>
+    </div>
+    <div id="workspaces"></div>
+    <div class="side-foot">
+      <div id="agents"></div>
+      <div class="row"><button id="settingsBtn" class="btn">Settings</button><span id="version" class="dim"></span></div>
+    </div>
+  </aside>
+  <main>
+    <header id="topbar"></header>
+    <div id="runstrip"></div>
+    <div id="subtasks"></div>
+    <div id="banners"></div>
+    <div id="stage"></div>
+    <div id="approve"></div>
+    <footer id="composer">
+      <div id="mode" class="seg"></div>
+      <span class="chev">❯</span>
+      <textarea id="prompt" rows="1" placeholder="Ask anything or describe a task…"></textarea>
+      <button id="send" title="Send (Enter)">↑</button>
+    </footer>
+  </main>
+  <aside id="right">
+    <div id="rtabs"></div>
+    <div id="rbody"></div>
+  </aside>
+  <div id="modal" hidden></div>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

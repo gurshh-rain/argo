@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import type { Assignment, Attention, CheckResult, Run, Task } from './types.ts'
-import { loadConfig, WORKSPACES, WORKTREES } from './config.ts'
+import { loadConfig, sharedDirs, WORKSPACES, WORKTREES } from './config.ts'
 import { runs, attention, save, emit, ensureProject, loadProject, renderMemory, ingestNotes, appendLog, assignment, dir, flush } from './store.ts'
 import { runAgent, spec, installed, type RunResult } from './agents.ts'
 import * as g from './git.ts'
@@ -117,7 +117,7 @@ async function plan(run: Run, autoApprove: boolean) {
   const ac = new AbortController()
   aborts.set(key(run, 'plan'), ac)
   const started = Date.now()
-  const res = await runAgent({ ...p, cwd: base(run), prompt: planPrompt(run), readOnly: true, signal: ac.signal, onLine: (l) => log(run, l) })
+  const res = await runAgent({ ...p, cwd: base(run), prompt: planPrompt(run), readOnly: true, addDirs: sharedDirs(), signal: ac.signal, onLine: (l) => log(run, l) })
   aborts.delete(key(run, 'plan'))
   record(run, 'plan', p, res, started)
   if (run.status === 'cancelled') return
@@ -234,7 +234,7 @@ async function execTask(run: Run, t: Task, extra?: { instruction?: string; escal
   const background = () => runAgent({
     ...a, cwd: t.worktree!, prompt: workPrompt(run, t, a, extra?.instruction), escalate: extra?.escalate,
     resume: extra?.instruction && a.agent === 'claude' ? t.sessionId : undefined,
-    addDirs: [dir(run.project, 'notes')], signal: ac.signal, onLine: out,
+    addDirs: [dir(run.project, 'notes'), ...sharedDirs()], signal: ac.signal, onLine: out,
     stuckMs: 240_000, onStuck: () => raise(run, 'stuck', 'No output for four minutes.', t.id),
   })
   // Work that other subtasks build on goes to a terminal the user has open, so they can watch and steer it.

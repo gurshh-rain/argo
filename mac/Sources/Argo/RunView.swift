@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct Inspector: View {
     @EnvironmentObject var store: Store
@@ -154,6 +155,9 @@ struct Composer: View {
     @EnvironmentObject var hub: TeamHub
     @State private var text = ""
     @State private var forceNew = false
+    /// Files picked with the paperclip or dropped on the composer; sent along with the next message.
+    @State private var attachments: [URL] = []
+    @State private var dropping = false
     var followup: Bool { !forceNew && store.run != nil && !["cancelled", "failed", "planning"].contains(store.run!.status) }
 
     var body: some View {
@@ -173,6 +177,23 @@ struct Composer: View {
                 }
                 .padding(10).background(Theme.rowSelected, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
+            if !attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(attachments, id: \.self) { url in
+                            HStack(spacing: 5) {
+                                Image(systemName: url.hasDirectoryPath ? "folder" : "doc").font(.system(size: 10.5))
+                                Text(url.lastPathComponent).font(.system(size: 11.5)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 180)
+                                Button { attachments.removeAll { $0 == url } } label: { Image(systemName: "xmark").font(.system(size: 8.5, weight: .bold)) }
+                                    .buttonStyle(.plain).help("Remove")
+                            }
+                            .foregroundStyle(Theme.text).padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Theme.chip, in: RoundedRectangle(cornerRadius: 6))
+                            .help(url.path)
+                        }
+                    }
+                }
+            }
             HStack(spacing: 8) {
                 if store.run != nil {
                     Segmented(selection: $forceNew, options: [
@@ -186,23 +207,69 @@ struct Composer: View {
                 TextField(followup ? "Tell the agents what to do next…" : (store.folder.isEmpty ? "Ask anything or describe a task. No project needed…" : "Describe one high-level task for \((store.folder as NSString).lastPathComponent)…"), text: $text, axis: .vertical)
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(Theme.text).lineLimit(1...4)
                     .onSubmit(send)
+                Button(action: pickFiles) {
+                    Image(systemName: "paperclip").font(.system(size: 13, weight: .medium)).frame(width: 26, height: 26)
+                }
+                    .buttonStyle(IconButton()).foregroundStyle(attachments.isEmpty ? Theme.dim : Theme.ring)
+                    .help("Attach files (or drop them here)")
                 Button(action: send) {
                     Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 26, height: 26)
-                        .background(text.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.chip : Theme.ring, in: Circle())
+                        .background(empty ? Theme.chip : Theme.ring, in: Circle())
                 }
                     .buttonStyle(.plain).help("Send (↩)")
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(empty)
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(Theme.bg)
         .overlay(alignment: .top) { HLine() }
+        .overlay { if dropping { RoundedRectangle(cornerRadius: 8).stroke(Theme.ring, lineWidth: 2).padding(3) } }
+        .onDrop(of: [.fileURL], isTargeted: $dropping) { providers in
+            for p in providers {
+                _ = p.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url, url.isFileURL else { return }
+                    DispatchQueue.main.async { if !attachments.contains(url) { attachments.append(url) } }
+                }
+            }
+            return true
+        }
+    }
+
+    var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty }
+
+    func pickFiles() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.prompt = "Attach"
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls where !attachments.contains(url) { attachments.append(url) }
+    }
+
+    /// Copies the attachments into ~/.argo/attachments/<batch>/ (which every agent may read, and which survives
+    /// the originals being moved) and returns the lines that tell the agents where they are.
+    func attach() -> String {
+        guard !attachments.isEmpty else { return "" }
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
+        let batch = Daemon.home.appendingPathComponent("attachments").appendingPathComponent("\(stamp)-\(UUID().uuidString.prefix(6))")
+        try? FileManager.default.createDirectory(at: batch, withIntermediateDirectories: true)
+        var lines: [String] = []
+        for url in attachments {
+            let dest = batch.appendingPathComponent(url.lastPathComponent)
+            do { try FileManager.default.copyItem(at: url, to: dest); lines.append("- \(dest.path)") }
+            catch { lines.append("- \(url.path) (could not be copied: \(error.localizedDescription))") }
+        }
+        attachments = []
+        return "\n\nAttached files (read them as part of this task):\n" + lines.joined(separator: "\n")
     }
 
     func send() {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !empty else { return }
+        if t.isEmpty { t = "Look at the attached files." }
+        t += attach()
         if followup { store.instruct(t) } else { store.newRun(t, terminals: hub.hasCLI(in: store.project)); forceNew = false }
         text = ""
     }
