@@ -70,8 +70,9 @@ async function startOrchestrator() {
   const logFile = path.join(HOME, 'orchestrator.log')
   const log = fs.openSync(logFile, 'a')
   try {
-    daemon = spawn(process.execPath, ['src/main.ts'], { cwd: orchestratorDir, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['ignore', log, log], windowsHide: true })
+    daemon = spawn(process.execPath, ['src/main.ts'], { cwd: orchestratorDir, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['ignore', log, log], windowsHide: true, detached: WIN })
     daemon.on('error', () => {})
+    daemon.unref()
   } catch (e) { return `Could not start the orchestrator: ${e.message}` } finally { fs.closeSync(log) }
   const mine = daemon
   for (let i = 0; i < 40; i++) {

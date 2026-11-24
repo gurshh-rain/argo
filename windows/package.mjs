@@ -1,4 +1,5 @@
-// Packages Argo for Windows into windows/dist/Argo-win32-x64/ (Argo.exe plus its files) and zips it.
+// Packages Argo for Windows into windows/dist/Argo-win32-x64/ (Argo.exe plus its files), zips it, and
+// builds the installer, dist/Argo-Setup.exe.
 // With the release key present it also writes dist/latest-win.json, the signed manifest the in-app updater
 // reads: attach it to the GitHub release next to Argo-win32-x64.zip.
 // Run on Windows for a build whose terminals work: the terminal library is native and is fetched for
@@ -33,10 +34,30 @@ console.log('Built', out)
 if (platform === 'win32' && !existsSync(join(here, 'node_modules', '@lydell', `node-pty-win32-${arch}`)))
   console.warn(`\nWARNING: the Windows terminal library (@lydell/node-pty-win32-${arch}) is not installed here, so terminals will not open in this build.\nPackage on Windows, or run: npm install --no-save --force @lydell/node-pty-win32-${arch}@1.1.0`)
 const zip = `${out}.zip`
+// Windows' own tar, by path: Git's tar earlier on the PATH reads C: as a remote host and cannot write a zip
+const winTar = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
 try {
-  execFileSync(process.platform === 'win32' ? 'tar.exe' : 'zip', process.platform === 'win32' ? ['-a', '-c', '-f', zip, '-C', dirname(out), 'Argo-' + platform + '-' + arch] : ['-qr', zip, 'Argo-' + platform + '-' + arch], { cwd: dirname(out) })
+  execFileSync(process.platform === 'win32' ? winTar : 'zip', process.platform === 'win32' ? ['-a', '-c', '-f', zip, '-C', dirname(out), 'Argo-' + platform + '-' + arch] : ['-qr', zip, 'Argo-' + platform + '-' + arch], { cwd: dirname(out) })
   console.log('Zipped', zip)
 } catch (e) { console.warn('Could not zip:', e.message) }
+
+// The installer: puts Argo in the Start menu and in Windows' list of installed apps, per user (no admin
+// prompt), in a folder the in-app updater can write to. Built from the folder packaged above, under a
+// fixed name: the website links to releases/latest/download/Argo-Setup.exe.
+if (platform === 'win32' && process.platform === 'win32') {
+  const { build, Platform, Arch } = await import('electron-builder')
+  await build({
+    targets: Platform.WINDOWS.createTarget('nsis', Arch[arch]), prepackaged: out, publish: 'never',
+    config: {
+      appId: 'dev.argo.app', productName: 'Argo', extraMetadata: { name: 'Argo' }, directories: { output: join(here, 'dist', 'installer') },
+      win: { icon: join(here, 'assets', 'icon.ico') },
+      nsis: { oneClick: true, perMachine: false, artifactName: 'Argo-Setup.exe', shortcutName: 'Argo', createDesktopShortcut: true, createStartMenuShortcut: true, runAfterFinish: true, deleteAppDataOnUninstall: false },
+    },
+  })
+  cpSync(join(here, 'dist', 'installer', 'Argo-Setup.exe'), join(here, 'dist', 'Argo-Setup.exe'))
+  rmSync(join(here, 'dist', 'installer'), { recursive: true, force: true })
+  console.log('Built', join(here, 'dist', 'Argo-Setup.exe'))
+} else if (platform === 'win32') console.warn('The installer (Argo-Setup.exe) is only built on Windows.')
 
 // The in-app updater installs only a zip signed with the release key (the one the Mac build uses), whose
 // public half is in update.js. latest-win.json tells installed copies what to fetch.

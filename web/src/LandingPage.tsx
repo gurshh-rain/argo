@@ -9,13 +9,13 @@ import { Brand, Icon, ThemeToggle } from './ui'
 import './app.css'
 import './landing.css'
 
-const repository = 'https://github.com/gurshh-rain/yc-hacky'
+const repository = 'https://github.com/gurshh-rain/argo'
 // Direct link to the DMG attached to the latest GitHub release.
 // GitHub redirects releases/latest/download/<file> to that file in the newest release, so this link
 // always serves the latest DMG. mac/package.sh writes it as Argo.dmg; attach it to every release.
 const dmgUrl = `${repository}/releases/latest/download/Argo.dmg`
-// The Windows build, attached to the same release by windows/package.mjs.
-const winUrl = `${repository}/releases/latest/download/Argo-win32-x64.zip`
+// The Windows installer, attached to the same release by windows/package.mjs.
+const winUrl = `${repository}/releases/latest/download/Argo-Setup.exe`
 // Visitors on Windows are offered the Windows build first.
 const onWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
 
@@ -182,8 +182,8 @@ export function LandingPage() {
               <article className="du-card cv-card cv-span-2">
                 <div className="cv-install-heading"><span className="cv-install-symbol" aria-hidden="true">{'[ Windows ]'}</span><span className="du-badge cv-platform">x64</span></div>
                 <h3 className="du-card-title">Windows</h3>
-                <p>The same workspace on Windows 10 and 11. Unzip it and open Argo.exe; it is not signed yet, so SmartScreen asks once.</p>
-                <a href={winUrl} className="du-btn cv-pill-block"><WindowsIcon />Download the zip</a>
+                <p>The same workspace on Windows 10 and 11. Run the installer and Argo is in your Start menu; it is not signed yet, so SmartScreen asks once.</p>
+                <a href={winUrl} className="du-btn cv-pill-block"><WindowsIcon />Download the installer</a>
               </article>
               <article className="du-card cv-card cv-span-2">
                 <div className="cv-install-heading"><span className="cv-install-symbol" aria-hidden="true">{'[ >_ ]'}</span><span className="du-badge cv-platform">Build it yourself</span></div>

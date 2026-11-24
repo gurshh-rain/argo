@@ -1,8 +1,9 @@
 {
   "name": "argo-windows",
   "productName": "Argo",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": true,
+  "author": "Argo",
   "description": "Argo for Windows: one task in, a team of coding agents on it.",
   "main": "main.js",
   "scripts": {
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
-    "electron": "45.3.3"
+    "electron": "45.3.3",
+    "electron-builder": "26.18.1"
   }
 }

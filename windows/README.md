@@ -17,16 +17,20 @@ npm start
 ## Package
 
 ```
-npm run package          # writes dist\Argo-win32-x64\Argo.exe, dist\Argo-win32-x64.zip and dist\latest-win.json
+npm run package          # writes dist\Argo-Setup.exe, dist\Argo-win32-x64.zip and dist\latest-win.json
 ```
 
 Package on Windows. The terminal library is native and `npm install` fetches it for the machine it runs
 on; packaging from a Mac needs `npm install --no-save --force @lydell/node-pty-win32-x64@1.1.0` first
 (and again after any other `npm install`, which removes it).
 
+`Argo-Setup.exe` is the installer people download: it installs for the current user (no admin prompt) into
+`%LOCALAPPDATA%\Programs\Argo`, adds Argo to the Start menu and the desktop, and lists it under Installed
+apps, where it can be uninstalled. It is only built on Windows. The zip is what the in-app updater fetches.
+
 `latest-win.json` is the manifest the in-app updater reads. It is written only when the release key is
 at `~/.argo-signing/ed25519.key` (or `ARGO_PRIVATE_KEY_FILE`), the same key the Mac build signs with.
-Attach both the zip and `latest-win.json` to the GitHub release, tagged `v<version>`.
+Attach the installer, the zip and `latest-win.json` to the GitHub release, tagged `v<version>`.
 
 ## What is here
 
@@ -78,4 +82,4 @@ separate `ARGO_HOME` and `ARGO_PORT` so it does not touch the orchestrator of an
 
 ## Not here yet
 
-- An installer and code signing: the build is an unsigned folder with `Argo.exe`, so SmartScreen will warn.
+- Code signing: the installer and `Argo.exe` are unsigned, so SmartScreen will warn.

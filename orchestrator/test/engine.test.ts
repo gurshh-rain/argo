@@ -148,7 +148,7 @@ test('with terminals on, subtasks others depend on wait for a terminal; final on
   assert.equal(run.tasks[2].status, 'pending')
   // t1: a terminal claims it and the agent there writes its result file
   const sent = engine.claim(run, 't1', 'Claude 1')
-  assert.match(sent.line, /prompts\/.*-t1\.md/)
+  assert.match(sent.line, /prompts[\\/].*-t1\.md/)
   assert.match(readFileSync(run.tasks[0].delegate!.promptFile, 'utf8'), /write your complete final message to .*results/)
   assert.throws(() => engine.claim(run, 't1', 'Claude 2'), /not waiting/)
   engine.requeue(run, 't1') // that terminal was closed: the subtask goes back to waiting
