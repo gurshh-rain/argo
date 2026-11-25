@@ -7,16 +7,28 @@ struct ArgoCommands: Commands {
     @ObservedObject var hub: TeamHub
 
     private var workspaces: [String] { store.workspaceList(terminals: hub.members.map(\.workspace)) }
-    private var panes: [Member] { hub.members(in: store.project) }
+    private var panes: [UUID] { hub.paneIDs(in: store.project) }
+    /// The focused pane when it is a file open in the editor.
+    private var focusedDoc: Doc? { hub.docs.first { $0.id == hub.focused && $0.workspace == store.project } }
     private var focusedMember: Member? { hub.members.first { $0.id == hub.focused && $0.workspace == store.project } }
 
     private func split(horizontal: Bool) {
-        hub.add(kind: focusedMember?.kind ?? "shell", project: store.project, beside: focusedMember?.id, horizontal: horizontal)
+        hub.add(kind: focusedMember?.kind ?? "shell", project: store.project, beside: focusedMember?.id ?? focusedDoc?.id, horizontal: horizontal)
+    }
+    /// Pick files to open in editor panes in this workspace.
+    private func openFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.directoryURL = URL(fileURLWithPath: store.folder.isEmpty ? NSHomeDirectory() : store.folder)
+        panel.prompt = "Open"
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls.prefix(8) { hub.open(file: url.path, in: store.project) }
     }
     private func movePane(_ by: Int) {
         guard !panes.isEmpty else { return }
-        let i = panes.firstIndex { $0.id == hub.focused } ?? -1
-        hub.focus(panes[(i + by + panes.count) % panes.count].id)
+        let i = panes.firstIndex { $0 == hub.focused } ?? -1
+        hub.focus(panes[(i + by + panes.count) % panes.count])
     }
 
     var body: some Commands {
@@ -24,10 +36,12 @@ struct ArgoCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Workspace") { store.newWorkspace() }.keyboardShortcut("n")
             Button("Open Folder…") { store.chooseProject() }.keyboardShortcut("o")
+            Button("Open File…") { openFile() }.keyboardShortcut("o", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .saveItem) {
-            Button("Close Pane") { if let m = focusedMember { hub.close(m.id) } }
-                .keyboardShortcut("w").disabled(focusedMember == nil)
+            Button("Save") { hub.saveFocused() }.keyboardShortcut("s").disabled(focusedDoc == nil)
+            Button("Close Pane") { if let d = focusedDoc { hub.closeDoc(d.id) } else if let m = focusedMember { hub.close(m.id) } }
+                .keyboardShortcut("w").disabled(focusedMember == nil && focusedDoc == nil)
             Button("Close Workspace") { store.forget(workspace: store.project) }
                 .keyboardShortcut("w", modifiers: [.command, .shift]).disabled(store.project.isEmpty)
         }

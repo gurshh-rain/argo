@@ -42,7 +42,7 @@ struct WorkspaceView: View {
             // Subtasks handed to a terminal are watched there, so they never get a pane of their own.
             let panes: [TaskItem] = (store.run?.tasks ?? []).filter { !$0.inTerminal && store.openPanes.contains("\(store.selectedRun ?? "")/\($0.id)") }
             let showOrch = store.run != nil && !store.closedPanes.contains("\(store.selectedRun ?? "")/orchestrator")
-            let hasTerminals = hub.layouts[ws] != nil && !terminals.isEmpty
+            let hasTerminals = hub.layouts[ws] != nil && !hub.paneIDs(in: ws).isEmpty
             let keys = (hasTerminals ? ["terminals:\(ws)"] : []) + panes.map { "pane:\(ws):\($0.id)" } + (showOrch ? ["pane:\(ws):orchestrator"] : [])
             if keys.isEmpty {
                 VStack(spacing: 8) {

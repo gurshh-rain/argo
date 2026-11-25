@@ -40,6 +40,9 @@ Everything the Mac app has, in the same places:
 - Terminals with split right / split down, draggable dividers, and a saved default layout. Plain ones are
   PowerShell; Claude, Devin, Codex, Gemini and Ollama terminals run that CLI and end when it does. A CLI you start
   yourself in a plain terminal is noticed, and subtasks are handed to the matching open terminal.
+- A code editor in the workspace: double-click a file in Files (or drop one on the workspace, or Ctrl+Shift+E)
+  and it opens in a pane beside the terminals. Ctrl+S saves. A file an agent changes on disk reloads by
+  itself; if you have unsaved edits the pane asks which version to keep.
 - Git worktree terminals: start an agent in a fresh worktree from the latest remote code, pull, remove.
 - `argo-msg` (on the PATH of every Argo terminal) for terminals to message each other.
 - The prompt bar with Follow-up / New task, file attachments (paperclip, or drop files on it) and plan
@@ -60,6 +63,7 @@ Shift or Alt, so the plain Ctrl keys stay with whatever runs in the terminal.
 | New workspace / open folder | Ctrl+Shift+N / Ctrl+Shift+O |
 | New terminal / new Claude, Devin, Codex, Gemini, Ollama, Shell | Ctrl+Shift+T / Alt+Shift+1 … 6 |
 | Split right / down | Ctrl+Shift+D / Alt+Shift+D |
+| Open a file / save it | Ctrl+Shift+E / Ctrl+S |
 | Close pane / close workspace | Ctrl+Shift+W / Alt+Shift+W |
 | Next / previous pane | Alt+Shift+] / Alt+Shift+[ |
 | Next / previous workspace, workspace 1 to 9 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1 … 9 |

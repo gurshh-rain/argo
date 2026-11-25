@@ -12,7 +12,7 @@ export type ProductMedia = {
 export const landingMedia: { hero: ProductMedia } = {
   hero: {
     kind: 'video',
-    src: '/media/argo.mp4',
+    src: '/media/argo-short.mp4',
     alt: 'Argo product animation',
     aspectRatio: '16 / 9',
     fit: 'contain',

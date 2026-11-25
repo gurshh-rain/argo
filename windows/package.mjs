@@ -19,7 +19,8 @@ rmSync(join(here, 'dist'), { recursive: true, force: true })
 const [out] = await packager({
   dir: here, out: join(here, 'dist'), name: 'Argo', platform, arch, overwrite: true, asar: false, icon: join(here, 'assets', 'icon.ico'),
   win32metadata: { CompanyName: 'Argo', FileDescription: 'Argo', ProductName: 'Argo' },
-  ignore: [/^\/dist($|\/)/, /^\/package\.mjs$/, /^\/README\.md$/],
+  // of the editor only the minified build is loaded; its other builds and source maps would add 80 MB
+  ignore: [/^\/dist($|\/)/, /^\/package\.mjs$/, /^\/README\.md$/, /^\/node_modules\/monaco-editor\/(dev|esm|min-maps)($|\/)/, /^\/node_modules\/monaco-editor\/monaco\.d\.ts$/],
   // the orchestrator ships beside the app, exactly as the Mac build bundles it
   afterCopy: [async (first, ...rest) => {
     // packager 20 passes one object; older versions pass (buildPath, ..., done)

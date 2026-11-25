@@ -15,6 +15,13 @@ contextBridge.exposeInMainWorld('argo', {
   pickFiles: () => ipcRenderer.invoke('pickFiles'),
   attach: (files) => ipcRenderer.invoke('attach', files),
   pathOf: (file) => webUtils.getPathForFile(file),
+  file: {
+    read: (file) => ipcRenderer.invoke('file:read', file),
+    write: (file, text, bom) => ipcRenderer.invoke('file:write', file, text, bom),
+    stat: (files) => ipcRenderer.invoke('file:stat', files),
+    pick: (dir) => ipcRenderer.invoke('pickFile', dir),
+  },
+  unsaved: (n) => ipcRenderer.send('unsaved', n),
   notify: (title, body) => ipcRenderer.send('notify', title, body),
   tray: (summary) => ipcRenderer.send('tray', summary),
   quit: () => ipcRenderer.send('quit'),

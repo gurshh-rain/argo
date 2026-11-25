@@ -89,6 +89,9 @@ Claude Code installed.
 - **Model controls.** Settings: default CLI (or Auto), a model per CLI, reasoning level, parallelism,
   whether plans need approval. Per-subtask override from the pane header. Every pane, the record and
   the phone show which agent and model did the work and whether it was an override.
+- **Editor.** Double-click a file in Files (or File > Open File…, ⇧⌘O) and it opens in a pane beside the
+  terminals, in the same split layout; ⌘S saves. The editor is Monaco, the one in VS Code. A file an agent
+  changes on disk reloads by itself; if you have unsaved edits, the pane asks which version to keep.
 - **Attention.** A failed agent, a blocked command, four minutes of silence, a merge conflict or a
   finished run raises a notification (blue ring and macOS notification).
   A follow-up while a subtask is blocked goes to that subtask ("approve" lets a blocked command run);

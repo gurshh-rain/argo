@@ -153,6 +153,7 @@ function deleteWorkspace(ws) {
   const rs = runsIn(ws).length, ts = termsIn(ws).length
   confirmBox(`Delete the workspace "${nameOf(ws)}"?`, `This closes its ${plural(ts, 'terminal')} and deletes its ${plural(rs, 'run')} with their records.` + (folderOf(ws) ? ' The folder and its files are not touched; branches with unmerged work are kept.' : ''), 'Delete workspace', () => act(async () => {
     for (const t of termsIn(ws)) closeTerm(t.id)
+    for (const e of editorsIn(ws)) closeEditor(e.id, true)
     for (const r of runsIn(ws)) { await api('DELETE', 'runs/' + r.id); delete S.owner[r.id] }
     S.workspaces = S.workspaces.filter((w) => w !== ws); save('workspaces', S.workspaces)
     delete S.names[ws]; delete S.descriptions[ws]; save('names', S.names); save('descriptions', S.descriptions); save('owner', S.owner)
@@ -258,8 +259,8 @@ function addTerm(kind, ws, { beside, horiz = true, place = true, tree } = {}) {
     { label: 'Close terminal', run: () => closeTerm(id) },
   ]))
   if (place) {
-    const mine = termsIn(ws).filter((x) => x.id !== id).map((x) => x.id)
-    const target = beside || (mine.includes(S.focused) ? S.focused : mine[mine.length - 1])
+    const mine = paneIds(ws)
+    const target = (beside && mine.includes(beside) ? beside : null) || (mine.includes(S.focused) ? S.focused : mine[mine.length - 1])
     S.layouts[ws] = target && S.layouts[ws] ? insert(S.layouts[ws], target, id, horiz) : { leaf: id }
   }
   S.focused = id; S.wantFocus = true
@@ -273,24 +274,146 @@ function closeTerm(id) {
   const t = terms.get(id); if (!t) return
   window.argo.pty.kill(id); t.term.dispose(); terms.delete(id); S.ring.delete(id)
   S.layouts[t.ws] = S.layouts[t.ws] ? remove(S.layouts[t.ws], id) : null
-  if (S.focused === id) { S.focused = termsIn(t.ws).pop()?.id || null; S.wantFocus = true }
+  if (S.focused === id) { S.focused = paneIds(t.ws).pop() || null; S.wantFocus = true }
   render(true)
 }
-function focusTerm(id) {
-  const t = terms.get(id); if (!t) return
-  if (t.ws !== S.project) select(t.ws)
-  S.focused = id; S.ring.delete(id); t.mail = null; S.wantFocus = true
+// Shows a pane (a terminal or a file), switching workspace if it lives in another one.
+function focusPane(id) {
+  const ws = paneWs(id); if (ws === undefined) return
+  if (ws !== S.project) select(ws)
+  const t = terms.get(id)
+  S.focused = id; S.ring.delete(id); if (t) t.mail = null; S.wantFocus = true
   render(true)
 }
+const focusTerm = focusPane
 const focusedTerm = () => { const t = terms.get(S.focused); return t && t.ws === S.project ? t : null }
 // The keyboard split opens the same kind of terminal as the focused one, beside it.
-function splitFocused(horiz) { const t = focusedTerm(), kind = t && usable(t.kind) ? t.kind : 'shell'; addTerm(kind, S.project, { beside: t?.id, horiz }) }
-function movePane(by) { const list = termsIn(S.project); if (!list.length) return; const i = list.findIndex((t) => t.id === S.focused); focusTerm(list[(i + by + list.length) % list.length].id) }
+function splitFocused(horiz) { const t = focusedTerm(), kind = t && usable(t.kind) ? t.kind : 'shell'; addTerm(kind, S.project, { beside: paneWs(S.focused) === S.project ? S.focused : undefined, horiz }) }
+function movePane(by) { const list = paneIds(S.project); if (!list.length) return; const i = list.indexOf(S.focused); focusPane(list[(i + by + list.length) % list.length]) }
 window.argo.pty.onData((id, data) => terms.get(id)?.term.write(data))
 window.argo.pty.onExit((id) => { const t = terms.get(id); if (t) { t.exited = true; t.cli = null; render() } })
 window.argo.onCLI((map) => { let changed = false; for (const t of terms.values()) if (!t.exited && id2cli(map, t) !== t.cli) { t.cli = id2cli(map, t); changed = true } if (changed) render() })
 const id2cli = (map, t) => (t.id in map ? map[t.id] || null : t.cli)
 window.argo.onMail((id, from, text) => { const t = terms.get(id); if (!t) return; t.mail = `${from}: ${text}`; if (S.focused !== id) S.ring.add(id); render() })
+
+// ---------- files opened in editor panes, side by side with the terminals
+// An editor pane sits in the same split layout as a terminal. The editor is Monaco (the one in VS Code).
+const editors = new Map() // id -> { id, ws, path, name, el, editor, model, mtime, savedId, dirty, stale, gone, bom }
+const editorsIn = (ws) => [...editors.values()].filter((e) => e.ws === ws)
+// every pane of a workspace, in the order the layout shows them
+const paneIds = (ws) => { const out = [], walk = (n) => n && (n.leaf ? (terms.has(n.leaf) || editors.has(n.leaf)) && out.push(n.leaf) : n.kids.forEach(walk)); walk(S.layouts[ws]); return out }
+const paneWs = (id) => (terms.get(id) || editors.get(id))?.ws
+let monacoReady = null
+const editorTheme = () => (document.documentElement.classList.contains('light') ? 'argo-light' : 'argo-dark')
+function loadMonaco() {
+  return (monacoReady ||= new Promise((ok, bad) => {
+    // an absolute address: the language workers resolve it from a blob, where a relative one points nowhere
+    require.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', location.href).href } })
+    require(['vs/editor/editor.main'], () => {
+      // the app's own surfaces, so an editor pane and a terminal pane read as one window
+      const colors = (bg, line, dim, sel) => ({ 'editor.background': bg, 'editorGutter.background': bg, 'editor.lineHighlightBackground': line, 'editor.lineHighlightBorder': '#00000000', 'editorLineNumber.foreground': dim, 'editor.selectionBackground': sel, 'editorWidget.background': bg, 'scrollbar.shadow': '#00000000' })
+      monaco.editor.defineTheme('argo-dark', { base: 'vs-dark', inherit: true, rules: [], colors: colors('#1e1e1e', '#262626', '#6e6e6e', '#007aff55') })
+      monaco.editor.defineTheme('argo-light', { base: 'vs', inherit: true, rules: [], colors: colors('#f7f7f7', '#efefef', '#9a9a9a', '#007aff33') })
+      ok(monaco)
+    }, bad)
+  }))
+}
+// Opens a file beside the focused pane, or shows the pane that already has it.
+async function openFile(path, { ws = S.project, beside, horiz = true } = {}) {
+  const open = editorsIn(ws).find((e) => e.path === path)
+  if (open) return focusPane(open.id)
+  const r = await window.argo.file.read(path)
+  if (r.error) return alertBox(r.error)
+  // images, binaries and very large files go to the system's own app for them
+  if (r.external) return window.argo.open(path)
+  let monaco
+  try { monaco = await loadMonaco() } catch (e) { return alertBox('The editor could not be loaded: ' + clean(e)) }
+  if (editorsIn(ws).some((e) => e.path === path)) return
+  const id = 'e' + Math.random().toString(36).slice(2, 9), el = h('div', { class: 'editor' })
+  // the id keeps the model's address unique if the same file is open in two workspaces; the language comes from the file name
+  const model = monaco.editor.createModel(r.text, undefined, monaco.Uri.file(path).with({ query: id }))
+  const editor = monaco.editor.create(el, { model, theme: editorTheme(), automaticLayout: true, fontFamily: 'Consolas, "Cascadia Mono", Menlo, monospace', fontSize: 12.5,
+    minimap: { enabled: false }, scrollBeyondLastLine: false, padding: { top: 6 }, fixedOverflowWidgets: true, renderWhitespace: 'selection', smoothScrolling: true })
+  const e = { id, ws, path, name: base(path), el, editor, model, mtime: r.mtime, savedId: model.getAlternativeVersionId(), dirty: false, stale: false, gone: false, bom: !!r.bom }
+  editors.set(id, e)
+  model.onDidChangeContent(() => markDirty(e))
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveEditor(id))
+  const mine = paneIds(ws), target = (beside && mine.includes(beside) ? beside : null) || (mine.includes(S.focused) ? S.focused : mine[mine.length - 1])
+  S.layouts[ws] = target && S.layouts[ws] ? insert(S.layouts[ws], target, id, horiz) : { leaf: id }
+  S.focused = id; S.wantFocus = true
+  render(true)
+}
+// The unsaved dot is switched in place: repainting the stage on a keystroke would take the keyboard away mid-word.
+function markDirty(e) {
+  const dirty = e.model.getAlternativeVersionId() !== e.savedId
+  if (dirty === e.dirty) return
+  e.dirty = dirty
+  const tab = document.querySelector(`[data-pane="${e.id}"] .unsaved`)
+  if (tab) tab.hidden = !dirty
+  window.argo.unsaved([...editors.values()].filter((x) => x.dirty).length)
+}
+async function saveEditor(id, force) {
+  const e = editors.get(id); if (!e) return
+  if (e.stale && !force) return confirmBox(`Overwrite ${e.name}?`, 'The file changed on disk after you opened it (an agent may have edited it). Saving replaces that version with yours.', 'Overwrite', () => saveEditor(id, true))
+  const version = e.model.getAlternativeVersionId(), r = await window.argo.file.write(e.path, e.model.getValue(), e.bom)
+  if (r.error) return alertBox(r.error)
+  e.mtime = r.mtime; e.savedId = version; e.gone = false
+  const wasStale = e.stale; e.stale = false
+  markDirty(e)
+  if (wasStale) render()
+}
+function closeEditor(id, force) {
+  const e = editors.get(id); if (!e) return
+  if (e.dirty && !force) return confirmBox(`Close ${e.name} without saving?`, 'Your changes to it will be lost.', 'Discard changes', () => closeEditor(id, true))
+  editors.delete(id); e.editor.dispose(); e.model.dispose()
+  S.layouts[e.ws] = S.layouts[e.ws] ? remove(S.layouts[e.ws], id) : null
+  if (S.focused === id) { S.focused = paneIds(e.ws).pop() || null; S.wantFocus = true }
+  window.argo.unsaved([...editors.values()].filter((x) => x.dirty).length)
+  render(true)
+}
+async function reloadEditor(id) {
+  const e = editors.get(id); if (!e) return
+  const r = await window.argo.file.read(e.path)
+  if (r.error || r.external) return
+  if (r.text !== e.model.getValue()) {
+    // one undoable edit that keeps the cursor where it was
+    const keep = e.editor.getSelections()
+    e.model.pushEditOperations(keep, [{ range: e.model.getFullModelRange(), text: r.text }], () => keep)
+  }
+  e.mtime = r.mtime; e.bom = !!r.bom; e.savedId = e.model.getAlternativeVersionId(); e.stale = false; e.gone = false
+  markDirty(e)
+}
+// Agents edit the same files. A file that changed on disk is reloaded if it has no unsaved edits here;
+// otherwise the pane says so and the user chooses.
+async function watchFiles() {
+  if (!editors.size) return
+  const times = await window.argo.file.stat([...new Set([...editors.values()].map((e) => e.path))]).catch(() => null)
+  if (!times) return
+  let changed = false
+  for (const e of [...editors.values()]) {
+    const now = times[e.path]
+    if (now === undefined) continue
+    if (now === null) { if (!e.gone) { e.gone = true; changed = true } continue }
+    if (e.gone) { e.gone = false; changed = true }
+    if (now === e.mtime) continue
+    if (!e.dirty) await reloadEditor(e.id)
+    else if (!e.stale) { e.stale = true; changed = true }
+  }
+  if (changed) render()
+}
+setInterval(() => watchFiles().catch(() => {}), 1500)
+function editorPane(e) {
+  const id = e.id, tool = (name, title, fn) => h('button', { class: 'icon', title, onclick: fn }, icon(name, 13))
+  const pane = h('div', { class: 'pane' + (S.focused === id ? ' active' : ''), 'data-pane': id, onmousedown: () => touch(id, pane) },
+    h('div', { class: 'tabbar' }, h('div', { class: 'tab file', title: e.path }, icon('file', 12), h('span', { class: 'name' }, e.name), h('span', { class: 'unsaved', title: 'Unsaved changes (Ctrl+S saves)', hidden: !e.dirty }),
+      e.gone && h('span', { class: 'tag' }, 'deleted'), h('button', { class: 'icon', title: 'Close this file (Ctrl+Shift+W)', onclick: () => closeEditor(id) }, icon('x', 10))),
+    h('div', { class: 'tools shrink' }, h('span', { class: 'where', title: e.path }, tilde(e.path.slice(0, e.path.length - e.name.length))), tool('term', 'New terminal beside this file', (ev) => menu(ev, termItems(id))),
+      tool('splitR', 'Split right: open a terminal beside this file', () => addTerm('shell', e.ws, { beside: id, horiz: true })), tool('splitD', 'Split down: open a terminal below this file', () => addTerm('shell', e.ws, { beside: id, horiz: false })))),
+    h('div', { class: 'body' }, e.el),
+    e.stale && h('div', { class: 'attnbar' }, icon('bell', 13), h('span', { class: 'msg', title: 'Someone else (an agent, most likely) changed this file. Reload shows their version and drops your edits; Keep mine leaves yours, and saving then replaces theirs.' }, 'Changed on disk while you have unsaved edits.'), h('span', { class: 'sp' }),
+      h('button', { class: 'btn', onclick: () => reloadEditor(id).then(() => render()) }, 'Reload'), h('button', { class: 'btn', onclick: () => { const x = editors.get(id); if (x) { x.stale = false; window.argo.file.stat([x.path]).then((t) => { if (t[x.path]) x.mtime = t[x.path] }); render() } } }, 'Keep mine')))
+  return pane
+}
 
 // default layout: the saved arrangement, or one shell
 const capture = (n) => !n ? null : n.leaf ? (terms.get(n.leaf) ? { kind: terms.get(n.leaf).kind } : null) : { h: n.h, items: n.kids.map(capture), w: n.w.slice() }
@@ -416,9 +539,9 @@ function wsTab(ws) {
     h('small', { class: needs.length ? 'two' : '' }, needs[0]?.message || (counts ? `${where} · ${counts}` : where)))
 }
 function installUpdate() {
-  const active = (S.state?.runs || []).filter(isActive).length
-  if (!active) return window.argo.update.install()
-  confirmBox('Install the update now?', `${active} run${active === 1 ? ' is' : 's are'} in progress. Installing quits Argo, which closes its terminals and interrupts work handed to them.`, 'Install and relaunch', () => window.argo.update.install())
+  const active = (S.state?.runs || []).filter(isActive).length, unsaved = [...editors.values()].filter((e) => e.dirty).length
+  if (!active && !unsaved) return window.argo.update.install()
+  confirmBox('Install the update now?', [active && `${active} run${active === 1 ? ' is' : 's are'} in progress. Installing quits Argo, which closes its terminals and interrupts work handed to them.`, unsaved && `${plural(unsaved, 'file')} with unsaved changes will lose them.`].filter(Boolean).join(' '), 'Install and relaunch', () => window.argo.update.install())
 }
 // Shown at the bottom of the sidebar when a newer version exists: one click downloads and installs it.
 function updatePill() {
@@ -591,9 +714,9 @@ addEventListener('resize', fitAll)
 // Clicking a pane focuses it without repainting the stage, so the click itself is not lost.
 function touch(id, pane) {
   const t = terms.get(id)
-  if (!t || (S.focused === id && !S.ring.has(id) && !t.mail)) return
-  S.focused = id; S.ring.delete(id); t.mail = null
-  document.querySelectorAll('.pane.active[data-term]').forEach((p) => p.classList.remove('active'))
+  if ((!t && !editors.has(id)) || (S.focused === id && !S.ring.has(id) && !t?.mail)) return
+  S.focused = id; S.ring.delete(id); if (t) t.mail = null
+  document.querySelectorAll('.pane.active[data-pane]').forEach((p) => p.classList.remove('active'))
   pane.classList.add('active'); pane.classList.remove('ring'); pane.querySelector('.mail')?.remove()
   stageSig = stageSignature()
   renderSidebar(); updateTray()
@@ -602,7 +725,7 @@ function termPane(t) {
   const id = t.id, job = runsIn(t.ws).flatMap((x) => x.tasks).find((x) => x.terminal === t.name && x.delegate?.state === 'sent')
   const wt = t.worktree && S.worktrees.find((w) => w.name === t.worktree), behind = wt?.behind || 0
   const tool = (name, title, fn) => h('button', { class: 'icon', title, onclick: fn }, icon(name, 13))
-  const pane = h('div', { class: 'pane' + (S.focused === id ? ' active' : '') + (S.ring.has(id) ? ' ring' : ''), 'data-term': id, onmousedown: () => touch(id, pane) },
+  const pane = h('div', { class: 'pane' + (S.focused === id ? ' active' : '') + (S.ring.has(id) ? ' ring' : ''), 'data-term': id, 'data-pane': id, onmousedown: () => touch(id, pane) },
     h('div', { class: 'tabbar' }, h('div', { class: 'tab' }, icon('term', 12), h('span', { class: 'name' }, t.name),
       t.worktree && h('span', { class: 'tag' + (behind ? ' hot' : ''), title: wt ? (behind ? `${behind} new commit(s) were pushed to ${wt.upstream || 'the remote'}. Pull latest from the worktree menu.` : `Up to date with ${wt.upstream || 'its base'}`) : t.cwd }, `⑂ ${t.worktree}${behind ? ` · ${behind} behind` : ''}`),
       t.exited && h('span', { class: 'tag' }, 'exited'),
@@ -614,7 +737,7 @@ function termPane(t) {
     h('div', { class: 'body' }, t.el))
   return pane
 }
-const layoutView = (n) => n.leaf ? (terms.get(n.leaf) ? termPane(terms.get(n.leaf)) : h('div')) : split(n.h, n.kids.map(layoutView), n.w)
+const layoutView = (n) => n.leaf ? (terms.has(n.leaf) ? termPane(terms.get(n.leaf)) : editors.has(n.leaf) ? editorPane(editors.get(n.leaf)) : h('div')) : split(n.h, n.kids.map(layoutView), n.w)
 const closePane = (key) => { S.closedPanes.add(key); S.openPanes.delete(key); render(true) }
 function taskPane(r, t) {
   const a = eff(t), needs = attn(r.id, t.id), rid = r.id, tid = t.id, key = `${rid}/${tid}`, lines = S.logs[tid] || [], sp = agent(a.agent), first = needs[0], aid = first?.id
@@ -644,12 +767,12 @@ let stageSig = ''
 const stagePanes = (r) => (r ? r.tasks.filter((t) => !inTerminal(t) && S.openPanes.has(`${r.id}/${t.id}`)) : [])
 function stageSignature() {
   const ws = S.project, r = run()
-  return JSON.stringify([ws, S.error, S.layouts[ws], S.focused, termsIn(ws).map((t) => [t.id, t.exited, t.mail, t.cli, S.ring.has(t.id), t.worktree && S.worktrees.find((w) => w.name === t.worktree)?.behind]), r?.id, r?.planner,
+  return JSON.stringify([ws, S.error, S.layouts[ws], S.focused, editorsIn(ws).map((e) => [e.id, e.name, e.stale, e.gone]), termsIn(ws).map((t) => [t.id, t.exited, t.mail, t.cli, S.ring.has(t.id), t.worktree && S.worktrees.find((w) => w.name === t.worktree)?.behind]), r?.id, r?.planner,
     stagePanes(r).map((t) => [t.id, t.title, t.status, t.error, t.difficulty, !!t.override, !!(S.logs[t.id] || []).length, attn(r.id, t.id).map((a) => a.id), eff(t)]), !!r && !S.closedPanes.has(r.id + '/orchestrator'),
     (S.state?.agents || []).map((a) => a.installed), runsIn(ws).flatMap((x) => x.tasks).filter((t) => t.delegate?.state === 'sent').map((t) => [t.id, t.terminal])])
 }
 function renderStage(force) {
-  const ws = S.project, r = run(), layout = S.layouts[ws], hasT = !!layout && termsIn(ws).length > 0, stage = $('stage')
+  const ws = S.project, r = run(), layout = S.layouts[ws], hasT = !!layout && paneIds(ws).length > 0, stage = $('stage')
   const sig = stageSignature()
   if (!force && sig === stageSig) {
     // structure unchanged: only refresh the log text in place
@@ -670,7 +793,7 @@ function renderStage(force) {
   const w = (stageW[ws] ||= {}), weights = keys.map((k) => w[k] || 1)
   stage.replaceChildren(split(false, cells, weights, () => keys.forEach((k, i) => (w[k] = weights[i]))))
   stage.querySelectorAll('[data-log]').forEach(placeLog)
-  requestAnimationFrame(() => { fitAll(); if (refocus && $('modal').hidden) terms.get(S.focused)?.term.focus() })
+  requestAnimationFrame(() => { fitAll(); if (refocus && $('modal').hidden) { terms.get(S.focused)?.term.focus(); editors.get(S.focused)?.editor.focus() } })
 }
 
 // ---------- the prompt bar
@@ -830,8 +953,8 @@ async function fileRows(dir, depth, out) {
     if (!hit && !(e.dir && open)) continue
     out.push(h('div', { class: 'file' + (S.selectedFile === e.path ? ' sel' : ''), style: `padding-left:${12 + depth * 14}px`, title: e.path,
       onclick: () => { S.selectedFile = e.path; if (e.dir) S.expanded.has(e.path) ? S.expanded.delete(e.path) : S.expanded.add(e.path); renderRight() },
-      ondblclick: () => !e.dir && window.argo.open(e.path),
-      oncontextmenu: (ev) => menu(ev, [{ label: `Show in ${fileManager()}`, run: () => window.argo.reveal(e.path) }, { label: 'Copy path', run: () => window.argo.copy(e.path) }, !e.dir && { label: 'Attach to the next message', run: () => addAttachments([e.path]) }]) },
+      ondblclick: () => !e.dir && openFile(e.path),
+      oncontextmenu: (ev) => menu(ev, [!e.dir && { label: 'Open', run: () => openFile(e.path) }, !e.dir && { label: 'Open below', run: () => openFile(e.path, { horiz: false }) }, !e.dir && { label: 'Open in its own app', run: () => window.argo.open(e.path) }, !e.dir && '-', { label: `Show in ${fileManager()}`, run: () => window.argo.reveal(e.path) }, { label: 'Copy path', run: () => window.argo.copy(e.path) }, !e.dir && { label: 'Attach to the next message', run: () => addAttachments([e.path]) }]) },
       h('span', { class: 'tw' }, e.dir && icon(open ? 'chevD' : 'chevR', 9)), icon(e.dir ? 'folder' : 'file', 12), h('span', {}, e.name)))
     if (e.dir && open && depth < 12) await fileRows(e.path, depth + 1, out)
   }
@@ -919,6 +1042,7 @@ function applyTheme() {
   const t = localStorage.getItem('theme') || 'dark', light = t === 'light' || (t === 'system' && matchMedia('(prefers-color-scheme: light)').matches)
   document.documentElement.classList.toggle('light', light)
   for (const x of terms.values()) x.term.options.theme = termTheme()
+  if (window.monaco) monaco.editor.setTheme(editorTheme())
 }
 // follow the system when it switches while the theme is set to System
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyTheme)
@@ -927,7 +1051,9 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyThem
 // What the Mac app has in its menu bar. Shortcuts carry Shift or Alt so the plain Ctrl keys stay with the terminals.
 const commands = {
   newWorkspace, openFolder, settings: openSettings, phone: openPhone, attention: jumpToAttention, jumpUnread: jumpToUnread,
-  closePane: () => { const t = focusedTerm(); if (t) closeTerm(t.id) },
+  closePane: () => { if (paneWs(S.focused) !== S.project) return; if (editors.has(S.focused)) closeEditor(S.focused); else closeTerm(S.focused) },
+  save: () => { if (editors.has(S.focused)) saveEditor(S.focused) },
+  openFile: async () => { for (const p of (await window.argo.file.pick(folderOf(S.project) || S.info.home)).slice(0, 8)) await openFile(p) },
   closeWorkspace: () => deleteWorkspace(S.project),
   newTerminal: () => addTerm('shell', S.project),
   newMember: (kind) => { if (usable(kind)) addTerm(kind, S.project); else alertBox(`${agent(kind)?.label || cap(kind)} is not installed${agent(kind)?.note ? ': ' + agent(kind).note : '.'}`) },
@@ -943,7 +1069,7 @@ const commands = {
   quit: () => window.argo.quit(),
 }
 const KEYS = {
-  'C-S-KeyN': ['newWorkspace'], 'C-S-KeyO': ['openFolder'], 'C-S-KeyW': ['closePane'], 'A-S-KeyW': ['closeWorkspace'], 'C-S-KeyT': ['newTerminal'],
+  'C-S-KeyN': ['newWorkspace'], 'C-S-KeyO': ['openFolder'], 'C-S-KeyE': ['openFile'], 'C-S-KeyW': ['closePane'], 'A-S-KeyW': ['closeWorkspace'], 'C-S-KeyT': ['newTerminal'],
   ...Object.fromEntries(KINDS.map(([id], i) => [`A-S-Digit${i + 1}`, ['newMember', id]])),
   'C-S-KeyD': ['splitRight'], 'A-S-KeyD': ['splitDown'], 'A-S-BracketRight': ['nextPane'], 'A-S-BracketLeft': ['prevPane'], 'C-S-KeyU': ['jumpUnread'],
   'C-S-BracketRight': ['nextWorkspace'], 'C-S-BracketLeft': ['prevWorkspace'], 'C-Tab': ['nextWorkspace'], 'C-S-Tab': ['prevWorkspace'],
@@ -953,7 +1079,7 @@ const KEYS = {
 function commandMenu(e) {
   const it = (label, hint, name, arg) => ({ label, hint, run: () => commands[name](arg) })
   menu(e, [
-    { head: 'File' }, it('New Workspace', 'Ctrl+Shift+N', 'newWorkspace'), it('Open Folder…', 'Ctrl+Shift+O', 'openFolder'), it('Close Pane', 'Ctrl+Shift+W', 'closePane'), it('Close Workspace…', 'Alt+Shift+W', 'closeWorkspace'),
+    { head: 'File' }, it('New Workspace', 'Ctrl+Shift+N', 'newWorkspace'), it('Open Folder…', 'Ctrl+Shift+O', 'openFolder'), it('Open File…', 'Ctrl+Shift+E', 'openFile'), { ...it('Save', 'Ctrl+S', 'save'), disabled: !editors.has(S.focused) }, it('Close Pane', 'Ctrl+Shift+W', 'closePane'), it('Close Workspace…', 'Alt+Shift+W', 'closeWorkspace'),
     { head: 'Team' }, it('New Terminal', 'Ctrl+Shift+T', 'newTerminal'), ...KINDS.map(([id, label], i) => ({ ...it(`New ${label} Member`, `Alt+Shift+${i + 1}`, 'newMember', id), disabled: !usable(id) })),
     it('Split Right', 'Ctrl+Shift+D', 'splitRight'), it('Split Down', 'Alt+Shift+D', 'splitDown'), it('Next Pane', 'Alt+Shift+]', 'nextPane'), it('Previous Pane', 'Alt+Shift+[', 'prevPane'), it('Jump to Unread', 'Ctrl+Shift+U', 'jumpUnread'),
     { head: 'Workspace' }, it('Next Workspace', 'Ctrl+Tab', 'nextWorkspace'), it('Previous Workspace', 'Ctrl+Shift+Tab', 'prevWorkspace'), { label: 'Workspace 1 to 9', hint: 'Alt+1 … Alt+9', disabled: true },
@@ -1002,6 +1128,8 @@ addEventListener('drop', (e) => {
   const pane = e.target.closest?.('[data-term]'), t = pane && terms.get(pane.getAttribute('data-term'))
   if ($('composer').contains(e.target)) addAttachments(paths)
   else if (t && !t.exited) { t.term.paste(paths.map((p) => (/\s/.test(p) ? `"${p}"` : p)).join(' ')); t.term.focus() }
+  // anywhere else in the workspace, a dropped file opens in an editor pane
+  else if ($('stage').contains(e.target)) (async () => { for (const p of paths.slice(0, 8)) await openFile(p, { beside: e.target.closest?.('[data-pane]')?.getAttribute('data-pane') }) })()
 })
 ;(async () => {
   applyTheme()

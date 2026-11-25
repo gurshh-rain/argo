@@ -1,7 +1,7 @@
 {
   "name": "argo-windows",
   "productName": "Argo",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "author": "Argo",
   "description": "Argo for Windows: one task in, a team of coding agents on it.",
@@ -14,6 +14,7 @@
     "@lydell/node-pty": "1.1.0",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
+    "monaco-editor": "0.52.2",
     "qrcode": "1.5.4"
   },
   "devDependencies": {

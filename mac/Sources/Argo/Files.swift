@@ -4,6 +4,7 @@ import AppKit
 /// The right-hand file tree, as in cmux: the project folder (or home), folders first, expand in place.
 struct FilesPanel: View {
     @EnvironmentObject var store: Store
+    @EnvironmentObject var hub: TeamHub
     @State private var expanded = Set<String>()
     @State private var selected: String?
     @State private var searching = false
@@ -60,13 +61,20 @@ struct FilesPanel: View {
         .padding(.leading, 12 + CGFloat(r.depth) * 14).padding(.trailing, 8).frame(height: 21)
         .background(selected == e.path ? Theme.rowSelected : Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { if !e.isDir { NSWorkspace.shared.open(URL(fileURLWithPath: e.path)) } }
+        // a file opens in an editor pane beside the terminals
+        .onTapGesture(count: 2) { if !e.isDir { hub.open(file: e.path, in: store.project) } }
         .onTapGesture {
             selected = e.path
             guard e.isDir else { return }
             if expanded.contains(e.path) { expanded.remove(e.path) } else { expanded.insert(e.path) }
         }
         .contextMenu {
+            if !e.isDir {
+                Button("Open") { hub.open(file: e.path, in: store.project) }
+                Button("Open below") { hub.open(file: e.path, in: store.project, horizontal: false) }
+                Button("Open in its own app") { NSWorkspace.shared.open(URL(fileURLWithPath: e.path)) }
+                Divider()
+            }
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: e.path)]) }
             Button("Copy path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(e.path, forType: .string) }
         }

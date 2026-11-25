@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- The editor in an Argo file pane on the Mac: Monaco, the same editor the Windows app uses. The app
+     talks to it through window.argo and hears back through the "argo" message handler. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body, #editor { height: 100%; margin: 0; overflow: hidden; }
+  body { background: #1e1e1e; }
+  body.light { background: #f7f7f7; }
+</style>
+</head>
+<body>
+<div id="editor"></div>
+<script src="vs/loader.js"></script>
+<script>
+const post = (m) => window.webkit.messageHandlers.argo.postMessage(m)
+let editor, model, savedId = 0, dirty = false, light = false
+const themeName = () => (light ? 'argo-light' : 'argo-dark')
+function mark() {
+  const now = model.getAlternativeVersionId() !== savedId
+  if (now !== dirty) post({ type: 'dirty', value: (dirty = now) })
+}
+window.argo = {
+  // `path` names the file, which is how the language is chosen
+  open(text, path) {
+    model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
+    editor = monaco.editor.create(document.getElementById('editor'), { model, theme: themeName(), automaticLayout: true, fontFamily: 'Menlo, Monaco, monospace', fontSize: 12,
+      minimap: { enabled: false }, scrollBeyondLastLine: false, padding: { top: 6 }, fixedOverflowWidgets: true, renderWhitespace: 'selection', smoothScrolling: true })
+    savedId = model.getAlternativeVersionId()
+    model.onDidChangeContent(mark)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => window.argo.save())
+    editor.onDidFocusEditorText(() => post({ type: 'focus' }))
+  },
+  // the file changed on disk: one undoable edit that keeps the cursor where it was
+  replace(text) {
+    if (!model) return
+    if (text !== model.getValue()) { const keep = editor.getSelections(); model.pushEditOperations(keep, [{ range: model.getFullModelRange(), text }], () => keep) }
+    savedId = model.getAlternativeVersionId(); mark()
+  },
+  save() { if (model) post({ type: 'save', text: model.getValue(), version: model.getAlternativeVersionId() }) },
+  saved(version) { savedId = version; mark() },
+  theme(isLight) { light = isLight; document.body.classList.toggle('light', light); if (window.monaco) monaco.editor.setTheme(themeName()) },
+  focus() { if (editor) editor.focus() },
+}
+require.config({ paths: { vs: new URL('vs', location.href).href } })
+require(['vs/editor/editor.main'], () => {
+  // the app's own surfaces, so an editor pane and a terminal pane read as one window
+  const colors = (bg, line, dim, sel) => ({ 'editor.background': bg, 'editorGutter.background': bg, 'editor.lineHighlightBackground': line, 'editor.lineHighlightBorder': '#00000000', 'editorLineNumber.foreground': dim, 'editor.selectionBackground': sel, 'editorWidget.background': bg, 'scrollbar.shadow': '#00000000' })
+  monaco.editor.defineTheme('argo-dark', { base: 'vs-dark', inherit: true, rules: [], colors: colors('#1e1e1e', '#262626', '#6e6e6e', '#007aff55') })
+  monaco.editor.defineTheme('argo-light', { base: 'vs', inherit: true, rules: [], colors: colors('#f7f7f7', '#efefef', '#9a9a9a', '#007aff33') })
+  post({ type: 'ready' })
+})
+</script>
+</body>
+</html>

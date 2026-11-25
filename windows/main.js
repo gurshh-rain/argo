@@ -124,6 +124,37 @@ ipcMain.handle('pickFiles', async () => {
   const r = await dialog.showOpenDialog(win, { properties: WIN ? ['openFile', 'multiSelections'] : ['openFile', 'openDirectory', 'multiSelections'], buttonLabel: 'Attach' })
   return r.canceled ? [] : r.filePaths
 })
+// ---- files opened in an editor pane
+// Text only, and not huge: anything else is handed to the system's own app for it.
+const EDITABLE = 2 << 20
+ipcMain.handle('file:read', (_e, file) => {
+  try {
+    const st = fs.statSync(String(file))
+    if (st.isDirectory()) return { error: `${file} is a folder.` }
+    if (st.size > EDITABLE) return { external: 'too large to edit here' }
+    const buf = fs.readFileSync(String(file))
+    if (buf.subarray(0, 8000).includes(0)) return { external: 'not a text file' }
+    const bom = buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf
+    return { text: buf.toString('utf8', bom ? 3 : 0), mtime: st.mtimeMs, bom }
+  } catch (e) { return { error: `Could not open ${file}: ${e.message}` } }
+})
+ipcMain.handle('file:write', (_e, file, text, bom) => {
+  try {
+    fs.writeFileSync(String(file), (bom ? '\ufeff' : '') + String(text))
+    return { mtime: fs.statSync(String(file)).mtimeMs }
+  } catch (e) { return { error: `Could not save ${file}: ${e.message}` } }
+})
+// When each open file last changed on disk (null once it is gone), so an agent's edit shows up in the editor.
+ipcMain.handle('file:stat', (_e, files) => Object.fromEntries((Array.isArray(files) ? files : []).map((f) => {
+  try { return [f, fs.statSync(String(f)).mtimeMs] } catch { return [f, null] }
+})))
+ipcMain.handle('pickFile', async (_e, dir) => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], defaultPath: dir && fs.existsSync(dir) ? dir : undefined, buttonLabel: 'Open' })
+  return r.canceled ? [] : r.filePaths
+})
+let unsaved = 0
+ipcMain.on('unsaved', (_e, n) => { unsaved = Number(n) || 0 })
+
 ipcMain.handle('attach', (_e, files) => {
   if (!Array.isArray(files) || !files.length) return ''
   const batch = path.join(HOME, 'attachments', `${new Date().toISOString().replace(/[:.]/g, '')}-${crypto.randomBytes(3).toString('hex')}`)
@@ -454,7 +485,15 @@ else {
       app.quit()
     }, Number(process.env.ARGO_SNAPSHOT_DELAY || 6) * 1000)
   })
-  app.on('before-quit', () => { quitting = true })
+  app.on('before-quit', (e) => {
+    // quitting closes the editors; say so while there is still something to save
+    if (!quitting && unsaved > 0 && win && !win.isDestroyed()) {
+      show()
+      const go = dialog.showMessageBoxSync(win, { type: 'warning', buttons: ['Quit anyway', 'Cancel'], defaultId: 1, cancelId: 1, message: `${unsaved} file${unsaved === 1 ? ' has' : 's have'} unsaved changes.`, detail: 'Quitting Argo discards them.' })
+      if (go !== 0) return e.preventDefault()
+    }
+    quitting = true
+  })
   app.on('window-all-closed', () => app.quit())
   app.on('will-quit', () => {
     for (const t of terms.values()) if (!t.exited) try { t.proc.kill() } catch {}

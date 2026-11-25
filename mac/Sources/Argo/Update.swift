@@ -229,6 +229,7 @@ enum Installer {
         // left the helper waiting forever. Close sheets first, and if the app is still alive a moment
         // later, exit outright: everything worth saving is already on disk.
         for w in NSApp.windows { if let sheet = w.attachedSheet { w.endSheet(sheet) } }
+        AppDelegate.quitNow = true
         NSApp.terminate(nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { exit(0) }
     }

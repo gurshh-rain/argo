@@ -26,12 +26,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[i + 1]))
             }
             if let dump = AppDelegate.dump { try? dump().write(toFile: args[i + 1] + ".txt", atomically: true, encoding: .utf8) }
+            AppDelegate.quitNow = true
             // an open sheet makes macOS refuse a normal quit
             if ProcessInfo.processInfo.environment["ARGO_SHEET"] != nil { exit(0) }
-            NSApp.terminate(nil)
+            // editor panes are web views, which the capture above leaves blank: each is written beside it as <out>.editor-N.png
+            if let shots = AppDelegate.editorShots { shots(args[i + 1]) { NSApp.terminate(nil) } } else { NSApp.terminate(nil) }
         }
     }
     static var dump: (() -> String)?
+    static var editorShots: ((String, @escaping () -> Void) -> Void)?
+    /// How many open files have unsaved changes; asked before quitting.
+    static var unsaved: (() -> Int)?
+    /// Set when the app is quitting to install an update, which has already been agreed to.
+    static var quitNow = false
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let n = Self.unsaved?() ?? 0
+        guard n > 0, !Self.quitNow else { return .terminateNow }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "\(n) file\(n == 1 ? " has" : "s have") unsaved changes."
+        alert.informativeText = "Quitting Argo discards them."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Quit anyway")
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
 
@@ -80,6 +98,18 @@ struct ArgoApp: App {
                     }
                     hub.watchAppearance()
                     AppDelegate.dump = { [hub] in hub.dumpText() }
+                    AppDelegate.unsaved = { [hub] in hub.unsaved.count }
+                    AppDelegate.editorShots = { [hub] base, done in hub.snapshotEditors(to: base, done: done) }
+                    // `ARGO_EDITOR_JS` runs that JavaScript in the first editor pane a few seconds after launch (for headless checks).
+                    if let js = ProcessInfo.processInfo.environment["ARGO_EDITOR_JS"] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { hub.docs.first.flatMap { hub.editor($0.id) }?.web.evaluateJavaScript(js, completionHandler: nil) }
+                    }
+                    hub.ask = { [store] in store.confirm = $0 }
+                    hub.tell = { [store] in store.banner = $0 }
+                    // `ARGO_OPEN=/a/file:/another` opens those files in editor panes shortly after launch (for headless checks).
+                    if let files = ProcessInfo.processInfo.environment["ARGO_OPEN"] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { for f in files.split(separator: ":") { hub.open(file: String(f), in: store.project) } }
+                    }
                     // `ARGO_SAVE_LAYOUT=1` saves the current arrangement as the default shortly after launch (for headless checks).
                     if ProcessInfo.processInfo.environment["ARGO_SAVE_LAYOUT"] != nil {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { LayoutTemplate.saved = hub.template(of: store.project, sizes: sizes) }

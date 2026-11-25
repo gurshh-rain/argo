@@ -80,7 +80,7 @@ final class TeamHub: ObservableObject {
         v.caretColor = dark ? .white : .black
         v.needsDisplay = true
     }
-    func restyleTerminals() { for v in views.values { Self.style(v) } }
+    func restyleTerminals() { for v in views.values { Self.style(v) }; restyleEditors() }
     /// Restyle the terminals whenever the effective appearance changes, including a system switch while set to System.
     func watchAppearance() {
         guard appearanceWatch == nil else { return }
@@ -90,6 +90,16 @@ final class TeamHub: ObservableObject {
     }
 
     @Published var members: [Member] = []
+    /// Files open in editor panes, and their editors. See Editor.swift.
+    @Published var docs: [Doc] = []
+    var editors: [UUID: EditorController] = [:]
+    /// Files with edits that are not saved, files that changed on disk under such edits, and files that are gone.
+    @Published var unsaved = Set<UUID>()
+    @Published var stale = Set<UUID>()
+    @Published var missing = Set<UUID>()
+    /// How the hub asks the user to confirm something, and tells them something went wrong.
+    var ask: ((Store.Confirm) -> Void)?
+    var tell: ((String) -> Void)?
     @Published var focused: UUID?
     /// Workspaces that have already been given their first terminal.
     var opened = Set<String>()
@@ -165,6 +175,7 @@ final class TeamHub: ObservableObject {
     func dispatch(store: Store) async {
         await detectCLIs()
         await deliverMail()
+        watchFiles()
         guard let runs = store.state?.runs else { return }
         for run in runs where run.isActive {
             let ws = store.workspace(of: run)
@@ -201,10 +212,11 @@ final class TeamHub: ObservableObject {
     /// The visible text of every terminal (for headless checks).
     func dumpText() -> String {
         members.map { m in "===== \(m.name) [\(cli[m.id] ?? "-")]\n" + (views[m.id].map { String(decoding: $0.getTerminal().getBufferAsData(), as: UTF8.self) } ?? "") }.joined(separator: "\n")
+            + docs.map { d in "\n===== file \(d.path)\(unsaved.contains(d.id) ? " [unsaved]" : "")\(stale.contains(d.id) ? " [changed on disk]" : "")\(missing.contains(d.id) ? " [deleted]" : "")\(focused == d.id ? " [focused]" : "")" }.joined()
     }
 
     func members(in ws: String) -> [Member] { members.filter { $0.workspace == ws } }
-    func closeAll(in ws: String) { for m in members(in: ws) { close(m.id) } }
+    func closeAll(in ws: String) { for m in members(in: ws) { close(m.id) }; for d in docs(in: ws) { closeDoc(d.id, force: true) } }
     @Published var ringing = Set<UUID>()
     @Published var exited = Set<UUID>()
     private var views: [UUID: LocalProcessTerminalView] = [:]
@@ -229,7 +241,7 @@ final class TeamHub: ObservableObject {
         let m = Member(name: "\(label) \(n)", kind: kind, cwd: cwd, workspace: project, worktree: worktree)
         members.append(m)
         // split off the chosen pane, else the focused one if it is in this workspace, else the last one here
-        let mine = members(in: project).dropLast().map(\.id)
+        let mine = members(in: project).dropLast().map(\.id) + docs(in: project).map(\.id)
         let target = beside ?? (focused.flatMap { mine.contains($0) ? $0 : nil }) ?? mine.last
         if let target, let l = layouts[project] { layouts[project] = l.inserting(m.id, beside: target, horizontal: horizontal) }
         else { layouts[project] = .leaf(m.id) }
@@ -303,7 +315,7 @@ final class TeamHub: ObservableObject {
         layouts[ws] = layouts[ws]?.removing(id)
         ringing.remove(id); exited.remove(id); inbox[id] = nil
         writeMailRoster(ws)
-        if focused == id { focused = members.last?.id }
+        if focused == id { focused = paneIDs(in: ws).last ?? members.last?.id }
         if !ws.isEmpty { writeRoster(project: ws) }
     }
 
@@ -312,6 +324,7 @@ final class TeamHub: ObservableObject {
         ringing.remove(id)
         inbox[id] = nil
         if let v = views[id] { v.window?.makeFirstResponder(v) }
+        editors[id]?.focus()
     }
 
     /// Lists the team so each agent can see who else is working alongside it.
@@ -413,6 +426,7 @@ struct LayoutView: View {
         switch node {
         case .leaf(let id):
             if let m = hub.members.first(where: { $0.id == id }) { TerminalPane(member: m) }
+            else if let d = hub.docs.first(where: { $0.id == id }) { EditorPane(doc: d) }
         case .split(let horizontal, let kids):
             SplitStack(horizontal: horizontal, keys: kids.map(\.key)) { i in LayoutView(node: kids[i]) }
         }
