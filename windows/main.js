@@ -137,7 +137,7 @@ ipcMain.handle('attach', (_e, files) => {
 
 // ---- terminals
 const terms = new Map() // id -> { proc, name, kind, workspace, cwd, worktree, exited, cli }
-const CLI = { claude: 'claude', devin: 'devin', codex: 'codex', ollama: 'ollama' }
+const CLI = { claude: 'claude', devin: 'devin', codex: 'codex', gemini: 'gemini', ollama: 'ollama' }
 const folderOf = (ws) => (!ws || ws.startsWith('ws:') ? '' : ws)
 const live = (ws) => [...terms.values()].filter((t) => t.workspace === ws && !t.exited)
 
@@ -240,13 +240,14 @@ ipcMain.on('pty:kill', (_e, id) => {
 })
 
 // ---- which coding CLI runs in each plain shell (the user may have typed `claude` into one)
-const AGENT_BINS = ['claude', 'devin', 'codex']
+const AGENT_BINS = ['claude', 'devin', 'codex', 'gemini']
 function cliOf(row) {
   const name = row.name.toLowerCase().replace(/\.exe$/, '')
   if (AGENT_BINS.includes(name)) return name
   if (!['node', 'bun', 'deno'].includes(name)) return undefined
   const cmd = row.cmd.toLowerCase()
-  return AGENT_BINS.find((b) => new RegExp(`[\\\\/@]${b}([\\\\/.-]|\\s|$)`).test(cmd))
+  // Gemini CLI is a node script; npm installs of the others are too (@google/gemini-cli, @anthropic-ai/claude-code)
+  return AGENT_BINS.find((b) => new RegExp(`[\\\\/@]${b}(-cli|-code)?([\\\\/.]|\\s|$)`).test(cmd))
 }
 // On Windows one hidden PowerShell stays open and is asked for the process table, which is far cheaper than starting one each time.
 let ps = null, psBuf = '', psDone = null, psBroken = false

@@ -1,4 +1,4 @@
-export type AgentId = 'claude' | 'codex' | 'devin' | 'ollama' | 'mock'
+export type AgentId = 'claude' | 'codex' | 'devin' | 'gemini' | 'ollama' | 'mock'
 export type Reasoning = 'low' | 'medium' | 'high'
 export type Difficulty = 'easy' | 'medium' | 'hard'
 export type TaskStatus = 'pending' | 'running' | 'merging' | 'done' | 'failed' | 'needs_attention' | 'cancelled'
@@ -52,7 +52,7 @@ export interface UsageCall {
   agent: AgentId
   model: string
   ok: boolean
-  // dollars as reported by the CLI; absent when it reports none (Codex, Devin, or work done in a user's terminal)
+  // dollars as reported by the CLI; absent when it reports none (Codex, Devin, Gemini, or work done in a user's terminal)
   costUsd?: number
   tokensIn?: number
   tokensOut?: number

@@ -47,8 +47,8 @@ const save = (k, v) => localStorage.setItem(k, JSON.stringify(v))
 const pretty = (s) => String(s || '').replace(/_/g, ' ')
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`
 const cap = (s) => String(s || '').replace(/(^|\s)\S/g, (c) => c.toUpperCase())
-const KINDS = [['claude', 'Claude'], ['devin', 'Devin'], ['codex', 'Codex'], ['ollama', 'Ollama'], ['shell', 'Shell']]
-const AGENT_KINDS = ['claude', 'devin', 'codex', 'ollama']
+const KINDS = [['claude', 'Claude'], ['devin', 'Devin'], ['codex', 'Codex'], ['gemini', 'Gemini'], ['ollama', 'Ollama'], ['shell', 'Shell']]
+const AGENT_KINDS = ['claude', 'devin', 'codex', 'gemini', 'ollama']
 
 const S = {
   info: { home: '', platform: 'win32', version: '', msg: 'argo-msg', packaged: false, demo: {} },
@@ -666,7 +666,7 @@ function renderStage(force) {
   for (const t of panes) { cells.push(taskPane(r, t)); keys.push('pane:' + t.id) }
   if (showOrch) { cells.push(orchPane(r)); keys.push('pane:orchestrator') }
   if (!cells.length) return stage.replaceChildren(h('div', { class: 'empty' }, h('b', {}, 'No terminals open'),
-    h('span', {}, 'Open a terminal and start Claude, Devin or Codex in it. Tasks you type below are handed to those terminals, so you watch the agents work right there.'), h('button', { class: 'btn large', style: 'margin-top:6px', onclick: (e) => menu(e, termItems()) }, icon('plus', 12), 'Add member')))
+    h('span', {}, 'Open a terminal and start Claude, Codex, Devin or Gemini in it. Tasks you type below are handed to those terminals, so you watch the agents work right there.'), h('button', { class: 'btn large', style: 'margin-top:6px', onclick: (e) => menu(e, termItems()) }, icon('plus', 12), 'Add member')))
   const w = (stageW[ws] ||= {}), weights = keys.map((k) => w[k] || 1)
   stage.replaceChildren(split(false, cells, weights, () => keys.forEach((k, i) => (w[k] = weights[i]))))
   stage.querySelectorAll('[data-log]').forEach(placeLog)
@@ -820,7 +820,7 @@ function usageView() {
     h('div', {}, h('h5', {}, 'Who did what'), [...all].sort((a, b) => b.c.at - a.c.at).slice(0, 20).map((e) => { const c = e.c; return h('div', { class: 'call' }, icon(c.ok ? 'check' : 'cross', 11),
       h('div', {}, h('div', { class: 'what' }, what(e)), h('div', { class: 'who ' + agClass(c.agent) }, `${agent(c.agent)?.label || c.agent} · ${c.model || 'default model'}${c.terminal ? ' · in a terminal' : ''}${c.ms > 0 ? ' · ' + duration(c.ms) : ''}`)),
       h('span', { class: 'cost' }, typeof c.costUsd === 'number' ? money(c.costUsd) : tokens([c]) || '')) })),
-    h('small', {}, 'Costs are what each CLI reports. Codex and Devin report none, so their tokens are shown instead; local Ollama models are free. Argo uses this record to route later tasks in this workspace.'))
+    h('small', {}, 'Costs are what each CLI reports. Codex, Devin and Gemini report none, so their tokens are shown instead; local Ollama models are free. Argo uses this record to route later tasks in this workspace.'))
 }
 // The file tree, as in the Mac app: the project folder (or home), folders first, expand in place.
 async function fileRows(dir, depth, out) {
@@ -892,7 +892,7 @@ function openSettings() {
       inst.map((a) => h('label', {}, a.label + ' model', sel(s.models[a.id] ?? '__default', [['__default', 'Orchestrator default'], ...a.models.map((m) => [m.id, m.id ? `${m.id} — ${m.note}` : 'cli default'])], (v) => { if (v === '__default') delete s.models[a.id]; else s.models[a.id] = v }))),
       h('label', {}, 'Reasoning level', sel(s.reasoning, [['low', 'low'], ['medium', 'medium'], ['high', 'high']], (v) => (s.reasoning = v))),
       h('label', {}, 'Parallel agents', par), h('label', {}, 'Run plans without waiting for my approval', auto), h('label', { class: 'col' }, 'Checks', checks)),
-    h('div', { class: 'foot' }, h('small', {}, 'Reasoning applies to Claude Code and Codex; Devin encodes it in the model name.'), h('button', { class: 'btn large', onclick: closeModal }, 'Cancel'), h('button', { class: 'btn primary large', onclick: () => {
+    h('div', { class: 'foot' }, h('small', {}, 'Reasoning applies to Claude Code and Codex; Devin and Gemini pick a stronger model instead.'), h('button', { class: 'btn large', onclick: closeModal }, 'Cancel'), h('button', { class: 'btn primary large', onclick: () => {
       closeModal()
       // the server replaces the pinned models with what it is sent, so a model the user un-pinned is simply left out
       const models = Object.fromEntries(inst.filter((a) => s.models[a.id] !== undefined).map((a) => [a.id, s.models[a.id]]))

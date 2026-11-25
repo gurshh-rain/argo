@@ -18,7 +18,7 @@ web/            Wasp app: landing page + phone console (start tasks, send follow
 
 ## Run it
 
-Requirements: macOS 14+, Node 24+, git, and at least one of `claude`, `codex`, `devin` on your PATH.
+Requirements: macOS 14+, Node 24+, git, and at least one of `claude`, `codex`, `devin`, `gemini` on your PATH.
 
 ```sh
 mac/build.sh && open mac/build/Argo.app      # starts the orchestrator itself
@@ -41,6 +41,15 @@ cd web && wasp install && wasp db migrate-dev
 
 On the phone: open the address and go to /app. There is no login: anyone who can reach the address can
 control your agents, so keep it on localhost or a private network (Tailscale).
+
+## Gemini CLI
+
+[Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm i -g @google/gemini-cli`, then run `gemini`
+once to sign in) works like the other CLIs: the planner can route subtasks to it, it reads and writes the
+shared record, and it can be opened in a terminal or a worktree. Difficulty picks the model: `flash-lite`
+for easy subtasks, `flash` for medium, `pro` for hard. In the background it may edit files on its own but
+asks before running commands: a blocked command raises a notification, and "approve" reruns the subtask
+with commands allowed.
 
 ## Ollama
 
@@ -73,7 +82,7 @@ Claude Code installed.
 - **Staying current.** A teammate may have pushed since you last pulled. A run fetches and merges the newest
   remote commits into its integration branch before it plans, again before the checks, and once more when
   you click Merge (a conflict goes to the lead agent; your own checkout is never touched). The
-  **Worktree** button opens Claude, Codex, Devin or a shell in a fresh worktree (`argo/wt/<name>`) started
+  **Worktree** button opens Claude, Codex, Devin, Gemini or a shell in a fresh worktree (`argo/wt/<name>`) started
   from the latest remote code, or puts another agent into an existing one. Each worktree tracks the remote
   branch; the app checks the remote every minute, shows "N behind" on that worktree's panes, and
   **Pull latest** merges new pushes in without losing an agent's uncommitted work.

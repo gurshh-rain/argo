@@ -74,7 +74,7 @@ struct SettingsSheet: View {
                 }.formStyle(.grouped).scrollContentBackground(.hidden)
             }
             HStack {
-                Text("Reasoning applies to Claude Code and Codex; Devin encodes it in the model name.").font(.caption).foregroundStyle(.secondary)
+                Text("Reasoning applies to Claude Code and Codex; Devin and Gemini pick a stronger model instead.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(ArgoButton(large: true))
                 Button("Save") {

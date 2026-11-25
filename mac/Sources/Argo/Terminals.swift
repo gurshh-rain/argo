@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 import SwiftTerm
 
-/// One live terminal. Every terminal is a member of the team: a Claude, Devin or Codex session, or a plain shell.
+/// One live terminal. Every terminal is a member of the team: a Claude, Devin, Codex or Gemini session, or a plain shell.
 struct Member: Identifiable, Hashable {
     let id = UUID()
     let name: String
-    let kind: String        // claude | codex | devin | shell
+    let kind: String        // claude | codex | devin | gemini | ollama | shell
     let cwd: String
     /// The workspace this terminal belongs to: the project folder, or "" when there is none.
     let workspace: String
@@ -109,31 +109,56 @@ final class TeamHub: ObservableObject {
         if !shells.isEmpty {
             let pids = shells.compactMap { m in views[m.id].map { (m.id, $0.process.shellPid) } }
             let table = await Task.detached { () -> [(Int32, Int32, String)] in
-                let p = Process()
-                p.executableURL = URL(fileURLWithPath: "/bin/ps")
-                p.arguments = ["-axo", "pid=,ppid=,comm="]
-                let pipe = Pipe()
-                p.standardOutput = pipe
-                guard (try? p.run()) != nil else { return [] }
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                return String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { line in
+                Self.ps(["-axo", "pid=,ppid=,comm="]).split(separator: "\n").compactMap { line in
                     let f = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
                     guard f.count == 3, let pid = Int32(f[0]), let ppid = Int32(f[1]) else { return nil }
                     return (pid, ppid, (String(f[2]) as NSString).lastPathComponent)
                 }
             }.value
+            // CLIs written in JavaScript (Gemini CLI, npm installs of the others) show up as node; their command line says which
+            var scripts: [UUID: [Int32]] = [:]
             for (id, shell) in pids {
                 var frontier = [shell], seen = Set<Int32>()
                 while let p = frontier.popLast(), found[id] == nil {
                     guard seen.insert(p).inserted else { continue }
                     for row in table where row.1 == p {
-                        if ["claude", "devin", "codex"].contains(row.2) { found[id] = row.2; break }
+                        if Self.agentBins.contains(row.2) { found[id] = row.2; break }
+                        if ["node", "bun", "deno"].contains(row.2) { scripts[id, default: []].append(row.0) }
                         frontier.append(row.0)
                     }
                 }
             }
+            let pending = scripts.filter { found[$0.key] == nil }
+            if !pending.isEmpty {
+                let list = pending.values.flatMap { $0 }.map(String.init).joined(separator: ",")
+                let rows = await Task.detached { Self.ps(["-o", "pid=,args=", "-p", list]) }.value
+                var args: [Int32: String] = [:]
+                for line in rows.split(separator: "\n") {
+                    let f = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+                    if f.count == 2, let pid = Int32(f[0]) { args[pid] = String(f[1]).lowercased() }
+                }
+                for (id, ps) in pending {
+                    found[id] = ps.lazy.compactMap { pid in args[pid].flatMap { cmd in Self.agentBins.first { cmd.range(of: "[/@]\($0)(-cli|-code)?([/.\\s]|$)", options: .regularExpression) != nil } } }.first
+                }
+            }
         }
         if found != cli { cli = found }
+    }
+
+    /// The coding CLIs Argo can hand subtasks to in a terminal, by executable name.
+    nonisolated static let agentBins = ["claude", "devin", "codex", "gemini"]
+
+    nonisolated static func ps(_ args: [String]) -> String {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/ps")
+        p.arguments = args
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return "" }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// Gives each subtask that is waiting for a terminal to a free one running the right CLI, and types the assignment into it.
@@ -186,7 +211,7 @@ final class TeamHub: ObservableObject {
     private var delegates: [UUID: TermDelegate] = [:]
 
     static let kinds: [(id: String, label: String, bin: String?)] = [
-        ("claude", "Claude", "claude"), ("devin", "Devin", "devin"), ("codex", "Codex", "codex"), ("ollama", "Ollama", "ollama"), ("shell", "Shell", nil),
+        ("claude", "Claude", "claude"), ("devin", "Devin", "devin"), ("codex", "Codex", "codex"), ("gemini", "Gemini", "gemini"), ("ollama", "Ollama", "ollama"), ("shell", "Shell", nil),
     ]
 
     /// Opens a terminal. It splits off `beside` (default: the focused pane), to the right or below.

@@ -30,15 +30,15 @@ export function defaultModel(agent: AgentId): string {
   const s = loadConfig().settings
   if (s.models[agent] !== undefined) return s.models[agent]
   if (agent === 'ollama') return spec('ollama')?.tiers.medium ?? ''
-  return { claude: 'sonnet', codex: '', devin: 'swe-2-high', mock: 'mock-1' }[agent]
+  return { claude: 'sonnet', codex: '', devin: 'swe-2-high', gemini: '', mock: 'mock-1' }[agent]
 }
 
 // Who plans and reviews: the user's default CLI, otherwise the strongest reasoner installed.
 export function lead(): Assignment {
   const s = loadConfig().settings
   const have = installed().map((a) => a.id)
-  if (!have.length) throw new Error('No coding CLI found on PATH. Install Claude Code, Codex or Devin, or start Ollama.')
-  const agent = s.defaultAgent !== 'auto' && have.includes(s.defaultAgent) ? s.defaultAgent : (['claude', 'codex', 'devin', 'ollama', 'mock'] as AgentId[]).find((a) => have.includes(a))!
+  if (!have.length) throw new Error('No coding CLI found on PATH. Install Claude Code, Codex, Devin or Gemini CLI, or start Ollama.')
+  const agent = s.defaultAgent !== 'auto' && have.includes(s.defaultAgent) ? s.defaultAgent : (['claude', 'codex', 'devin', 'gemini', 'ollama', 'mock'] as AgentId[]).find((a) => have.includes(a))!
   return { agent, model: defaultModel(agent), reasoning: s.reasoning }
 }
 

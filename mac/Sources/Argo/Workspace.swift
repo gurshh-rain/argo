@@ -47,7 +47,7 @@ struct WorkspaceView: View {
             if keys.isEmpty {
                 VStack(spacing: 8) {
                     Text("No terminals open").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.text)
-                    Text("Open a terminal and start Claude, Devin or Codex in it. Tasks you type below are handed to those terminals, so you watch the agents work right there.")
+                    Text("Open a terminal and start Claude, Codex, Devin or Gemini in it. Tasks you type below are handed to those terminals, so you watch the agents work right there.")
                         .font(.system(size: 12.5)).foregroundStyle(Theme.dim).multilineTextAlignment(.center).frame(maxWidth: 480)
                     AddMemberMenu().padding(.top, 6)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)

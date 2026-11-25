@@ -235,7 +235,8 @@ async function execTask(run: Run, t: Task, extra?: { instruction?: string; escal
   aborts.set(key(run, t.id), ac)
   const background = () => runAgent({
     ...a, cwd: t.worktree!, prompt: workPrompt(run, t, a, extra?.instruction), escalate: extra?.escalate,
-    resume: extra?.instruction && a.agent === 'claude' ? t.sessionId : undefined,
+    // Claude Code and Gemini CLI can pick up the same session, so a retry keeps what the agent already learned
+    resume: extra?.instruction && (a.agent === 'claude' || a.agent === 'gemini') ? t.sessionId : undefined,
     addDirs: [dir(run.project, 'notes'), ...sharedDirs()], signal: ac.signal, onLine: out,
     stuckMs: 240_000, onStuck: () => raise(run, 'stuck', 'No output for four minutes.', t.id),
   })

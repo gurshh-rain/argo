@@ -37,7 +37,7 @@ struct UsagePanel: View {
                         totals(all.map(\.call))
                         ForEach(agents(all), id: \.self) { agent in agentSection(agent, all.filter { $0.call.agent == agent }.map(\.call)) }
                         recent(all)
-                        Text("Costs are what each CLI reports. Codex and Devin report none, so their tokens are shown instead; local Ollama models are free. Argo uses this record to route later tasks in this workspace.")
+                        Text("Costs are what each CLI reports. Codex, Devin and Gemini report none, so their tokens are shown instead; local Ollama models are free. Argo uses this record to route later tasks in this workspace.")
                             .font(.system(size: 10.5)).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
                     }
                 }

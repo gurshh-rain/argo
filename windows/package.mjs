@@ -44,7 +44,8 @@ try {
 // The installer: puts Argo in the Start menu and in Windows' list of installed apps, per user (no admin
 // prompt), in a folder the in-app updater can write to. Built from the folder packaged above, under a
 // fixed name: the website links to releases/latest/download/Argo-Setup.exe.
-if (platform === 'win32' && process.platform === 'win32') {
+// electron-builder brings its own NSIS, so this also works from a Mac.
+if (platform === 'win32') {
   const { build, Platform, Arch } = await import('electron-builder')
   await build({
     targets: Platform.WINDOWS.createTarget('nsis', Arch[arch]), prepackaged: out, publish: 'never',
@@ -57,7 +58,7 @@ if (platform === 'win32' && process.platform === 'win32') {
   cpSync(join(here, 'dist', 'installer', 'Argo-Setup.exe'), join(here, 'dist', 'Argo-Setup.exe'))
   rmSync(join(here, 'dist', 'installer'), { recursive: true, force: true })
   console.log('Built', join(here, 'dist', 'Argo-Setup.exe'))
-} else if (platform === 'win32') console.warn('The installer (Argo-Setup.exe) is only built on Windows.')
+}
 
 // The in-app updater installs only a zip signed with the release key (the one the Mac build uses), whose
 // public half is in update.js. latest-win.json tells installed copies what to fetch.

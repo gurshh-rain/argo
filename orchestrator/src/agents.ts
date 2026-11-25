@@ -70,6 +70,22 @@ export const CATALOG: AgentSpec[] = [
     reasoning: false,
   },
   {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    bin: 'gemini',
+    strengths: 'reading and reasoning over large amounts of code at once (very long context), research with Google Search, explaining and documenting code, front-end and general implementation',
+    speed: 'fast',
+    cost: 'low',
+    models: [
+      { id: 'pro', note: 'Gemini Pro: strongest reasoning, slowest' },
+      { id: 'flash', note: 'Gemini Flash: fast and balanced' },
+      { id: 'flash-lite', note: 'fastest and cheapest, for mechanical edits' },
+    ],
+    // Gemini CLI has no reasoning-effort flag; difficulty picks the model alias instead
+    tiers: { easy: 'flash-lite', medium: 'flash', hard: 'pro' },
+    reasoning: false,
+  },
+  {
     // Open models served by Ollama, on this machine or in Ollama's cloud (names ending in "-cloud").
     // Ollama serves models, it is not an agent, so Claude Code runs as the harness (file edits, commands,
     // search) pointed at the Ollama server instead of Anthropic. This is what `ollama launch claude` does.
@@ -226,6 +242,17 @@ function command(o: RunOpts, tmp: string): { bin: string; args: string[]; stdin?
       if (o.model) args.push('--model', o.model)
       return { bin: 'devin', args }
     }
+    case 'gemini': {
+      // -p forces headless mode and is appended to the prompt piped on stdin. Headless, a tool that would
+      // ask for approval is denied instead, so: read-only work gets no edits or commands, normal work may
+      // edit files but not run commands until the user approves, and an approved retry runs everything.
+      const args = ['-p', 'Carry out the instructions above.', '--output-format', 'stream-json', '--approval-mode', o.readOnly ? 'default' : o.escalate ? 'yolo' : 'auto_edit']
+      if (o.model) args.push('-m', o.model)
+      for (const d of o.addDirs || []) args.push('--include-directories', d)
+      if (o.resume) args.push('-r', o.resume)
+      // headless, an untrusted folder is a fatal error rather than a prompt; Argo's worktrees are trusted for this run
+      return { bin: 'gemini', args, stdin: o.prompt, env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
+    }
     case 'mock':
       return { bin: process.execPath, args: [join(import.meta.dirname, 'mock-agent.ts')], stdin: o.prompt }
   }
@@ -286,6 +313,46 @@ function parser(agent: AgentId, out: RunResult, emit: (l: string) => void) {
         }
       }
     }
+  if (agent === 'gemini') {
+    // Assistant text arrives in chunks; a message ends where a tool call or the result begins.
+    // The last message is the agent's answer.
+    let msg = ''
+    const tools = new Map<string, string>()
+    const flush = () => {
+      const t = msg.trim()
+      msg = ''
+      if (t) (out.text = t), emit(t)
+    }
+    return (line: string) => {
+      let e: any
+      try { e = JSON.parse(line) } catch { return emit(line) }
+      if (e.type === 'init') out.sessionId = e.session_id
+      else if (e.type === 'message' && e.role === 'assistant') {
+        if (!e.delta) flush()
+        msg += e.content || ''
+      } else if (e.type === 'tool_use') {
+        flush()
+        const p = e.parameters || {}
+        const call = `${e.tool_name}(${short(p.command ?? p.file_path ?? p.absolute_path ?? p.dir_path ?? p.pattern ?? p.query ?? p, 70)})`
+        tools.set(e.tool_id, call)
+        emit(`⏺ ${call}`)
+      } else if (e.type === 'tool_result' && e.status === 'error') {
+        const why = String(e.error?.message ?? e.output ?? '')
+        emit(`  ⎿ error: ${short(why, 240)}`)
+        // headless, a tool that would need approval is refused; that is a permission block, not a failure
+        if (e.error?.type === 'policy_violation' || /denied by policy|requires user confirmation/i.test(why)) out.denials.push(tools.get(e.tool_id) || 'a tool')
+      } else if (e.type === 'error') {
+        emit(`${e.severity === 'warning' ? 'warning' : 'error'}: ${short(e.message, 240)}`)
+        if (e.severity !== 'warning') out.error = short(e.message, 400)
+      } else if (e.type === 'result') {
+        flush()
+        out.ok = e.status === 'success'
+        if (e.error) out.error = short(e.error.message || e.error.type, 400)
+        // Gemini CLI reports tokens but no price
+        if (e.stats) (out.tokensIn = e.stats.input_tokens || 0), (out.tokensOut = e.stats.output_tokens || 0)
+      }
+    }
+  }
   return (line: string) => {
     emit(line)
     if (line.trim()) out.text = (out.text + '\n' + line).slice(-4000)
@@ -296,7 +363,7 @@ export function runAgent(o: RunOpts): Promise<RunResult> {
   const tmp = mkdtempSync(join(tmpdir(), 'argo-'))
   const { bin, args, stdin, env } = command(o, tmp)
   const out: RunResult = { ok: false, text: '', denials: [] }
-  const structured = o.agent === 'claude' || o.agent === 'codex' || o.agent === 'ollama'
+  const structured = o.agent === 'claude' || o.agent === 'codex' || o.agent === 'gemini' || o.agent === 'ollama'
   const parse = parser(o.agent, out, o.onLine)
   return new Promise((resolve) => {
     let child

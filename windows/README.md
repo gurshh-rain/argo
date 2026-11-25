@@ -6,7 +6,7 @@ and usage tracking behave the same. This folder is the window and the terminals.
 
 ## Run from source (on Windows)
 
-Requirements: Node 24+, git, and at least one of `claude`, `codex`, `devin` on your PATH.
+Requirements: Node 24+, git, and at least one of `claude`, `codex`, `devin`, `gemini` on your PATH.
 
 ```
 cd windows
@@ -26,7 +26,7 @@ on; packaging from a Mac needs `npm install --no-save --force @lydell/node-pty-w
 
 `Argo-Setup.exe` is the installer people download: it installs for the current user (no admin prompt) into
 `%LOCALAPPDATA%\Programs\Argo`, adds Argo to the Start menu and the desktop, and lists it under Installed
-apps, where it can be uninstalled. It is only built on Windows. The zip is what the in-app updater fetches.
+apps, where it can be uninstalled. The zip is what the in-app updater fetches.
 
 `latest-win.json` is the manifest the in-app updater reads. It is written only when the release key is
 at `~/.argo-signing/ed25519.key` (or `ARGO_PRIVATE_KEY_FILE`), the same key the Mac build signs with.
@@ -38,7 +38,7 @@ Everything the Mac app has, in the same places:
 
 - Workspaces in the sidebar (with or without a folder): rename, describe, delete, back and forward.
 - Terminals with split right / split down, draggable dividers, and a saved default layout. Plain ones are
-  PowerShell; Claude, Devin, Codex and Ollama terminals run that CLI and end when it does. A CLI you start
+  PowerShell; Claude, Devin, Codex, Gemini and Ollama terminals run that CLI and end when it does. A CLI you start
   yourself in a plain terminal is noticed, and subtasks are handed to the matching open terminal.
 - Git worktree terminals: start an agent in a fresh worktree from the latest remote code, pull, remove.
 - `argo-msg` (on the PATH of every Argo terminal) for terminals to message each other.
@@ -58,7 +58,7 @@ Shift or Alt, so the plain Ctrl keys stay with whatever runs in the terminal.
 | | |
 |---|---|
 | New workspace / open folder | Ctrl+Shift+N / Ctrl+Shift+O |
-| New terminal / new Claude, Devin, Codex, Ollama, Shell | Ctrl+Shift+T / Alt+Shift+1 … 5 |
+| New terminal / new Claude, Devin, Codex, Gemini, Ollama, Shell | Ctrl+Shift+T / Alt+Shift+1 … 6 |
 | Split right / down | Ctrl+Shift+D / Alt+Shift+D |
 | Close pane / close workspace | Ctrl+Shift+W / Alt+Shift+W |
 | Next / previous pane | Alt+Shift+] / Alt+Shift+[ |
