@@ -7,7 +7,8 @@ export function sh(cmd: string, args: string[], cwd: string, timeout = 120_000):
   // checks are run through the platform's own shell
   if (process.platform === 'win32' && cmd === '/bin/sh') (cmd = process.env.ComSpec || 'cmd.exe'), (args = ['/d', '/s', '/c', args[1]])
   return new Promise((resolve) =>
-    execFile(cmd, args, { cwd, timeout, maxBuffer: 16 << 20 }, (err, stdout, stderr) =>
+    // windowsHide: on Windows the orchestrator has no console, so git would otherwise open a console window each time
+    execFile(cmd, args, { cwd, timeout, maxBuffer: 16 << 20, windowsHide: true }, (err, stdout, stderr) =>
       resolve({ ok: !err, out: (stdout + (stderr ? '\n' + stderr : '')).trim() }),
     ),
   )
@@ -111,7 +112,7 @@ export function fetchRemote(cwd: string, upstream: string): Promise<{ ok: boolea
     const remotes = (await git(cwd, 'remote')).out.split('\n').filter(Boolean)
     const remote = remotes.filter((r) => upstream.startsWith(r + '/')).sort((a, b) => b.length - a.length)[0]
     if (!remote) return done({ ok: true, out: '' }) // a local branch as upstream: nothing to fetch
-    execFile('git', ['fetch', '--quiet', remote], { cwd, timeout: 30_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' } }, (err, _o, e) =>
+    execFile('git', ['fetch', '--quiet', remote], { cwd, timeout: 30_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' } }, (err, _o, e) =>
       done({ ok: !err, out: String(e || err?.message || '').trim() }))
   })
 }

@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import type { AgentId, Assignment, Difficulty } from './types.ts'
 
 const WIN = process.platform === 'win32'
+// Every child process is started with windowsHide. The orchestrator has no console of its own on Windows, so
+// without it each git, curl or CLI call would open a console window on the user's desktop.
 // cmd.exe quoting: wrap in double quotes when needed and double any inner quote
 export const winQuote = (a: string) => (/^[\w.:\\/=-]+$/.test(a) ? a : `"${a.replace(/"/g, '""')}"`)
 
@@ -127,13 +129,13 @@ export function ollamaModels(tags: any): Pick<AgentSpec, 'models' | 'tiers'> {
 function detectOllama(a: AgentSpec, haveClaude: boolean): AgentSpec {
   let version: string
   try {
-    version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], shell: WIN }).trim().split('\n')[0].replace(/^ollama version is /, '')
+    version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], shell: WIN, windowsHide: true }).trim().split('\n')[0].replace(/^ollama version is /, '')
   } catch {
     return { ...a, installed: false }
   }
   let tags: any
   try {
-    tags = JSON.parse(execFileSync('curl', ['-s', '-m', '3', `${ollamaHost()}/api/tags`], { encoding: 'utf8', timeout: 5000 }))
+    tags = JSON.parse(execFileSync('curl', ['-s', '-m', '3', `${ollamaHost()}/api/tags`], { encoding: 'utf8', timeout: 5000, windowsHide: true }))
   } catch {
     return { ...a, installed: false, version, note: `Ollama is installed but its server is not answering at ${ollamaHost()}. Open the Ollama app or run \`ollama serve\`.` }
   }
@@ -166,7 +168,7 @@ export function agents(refresh = false): AgentSpec[] {
   ollamaChecked = Date.now()
   detected = CATALOG.filter((a) => a.id !== 'ollama').map((a) => {
     try {
-      const version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], shell: WIN }).trim().split('\n')[0]
+      const version = execFileSync(a.bin, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], shell: WIN, windowsHide: true }).trim().split('\n')[0]
       return { ...a, installed: true, version }
     } catch {
       return { ...a, installed: false }
