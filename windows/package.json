@@ -1,7 +1,7 @@
 {
   "name": "argo-windows",
   "productName": "Argo",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "private": true,
   "author": "Argo",
   "description": "Argo for Windows: one task in, a team of coding agents on it.",

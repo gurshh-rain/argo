@@ -14,7 +14,7 @@ const MAIL = path.join(HOME, 'mail')
 const BIN = path.join(HOME, 'bin')
 const orchestratorDir = app.isPackaged ? path.join(process.resourcesPath, 'orchestrator') : path.join(__dirname, '..', 'orchestrator')
 const asset = (f) => path.join(__dirname, 'assets', f)
-let win, tray, daemon, quitting = false, toldAboutTray = false
+let win, tray, daemon, quitting = false, updating = false, toldAboutTray = false
 
 // The terminal library is native. Without it the app still opens and says why terminals cannot.
 let pty = null, ptyError = ''
@@ -84,9 +84,9 @@ async function startOrchestrator() {
   try { tail = fs.readFileSync(logFile, 'utf8').slice(-300) } catch {}
   return `The orchestrator did not start. See ${logFile}\n${tail}`
 }
-// one start at a time, however many callers are waiting on it
+// one start at a time, however many callers are waiting on it; none once an update has stopped it to replace the app folder
 let ensuring = null
-const ensureOrchestrator = () => (ensuring ||= startOrchestrator().finally(() => (ensuring = null)))
+const ensureOrchestrator = () => (updating ? null : (ensuring ||= startOrchestrator().finally(() => (ensuring = null))))
 
 ipcMain.handle('api', (_e, method, route, body) => request(method, route, body))
 ipcMain.handle('ensure', ensureOrchestrator)
@@ -429,7 +429,7 @@ const updater = createUpdater({
   app, emit: (state) => send('update', state),
   // the orchestrator and the terminals run out of the app folder, which is about to be replaced
   beforeQuit: async () => {
-    quitting = true
+    quitting = updating = true
     for (const t of terms.values()) if (!t.exited) try { t.proc.kill() } catch {}
     if (ps) try { ps.kill() } catch {}
     await request('POST', 'quit').catch(() => {})

@@ -33,14 +33,32 @@ function verify(file, signature, publicKey = PUBLIC_KEY) {
 
 // The helper waits for this process to exit, swaps the app folder, and opens the new copy. The old folder
 // is only removed once the new one is in position, so a failed swap leaves Argo installed.
-function swapScript(pid, dest, fresh, stage) {
-  return ['@echo off', 'setlocal', `set "DEST=${dest}"`, `set "NEW=${fresh}"`, `set "OLD=${dest}.old-${pid}"`, `set "STAGE=${stage}"`, 'set /a N=0',
-    ':wait', `tasklist /FI "PID eq ${pid}" /NH 2>nul | find "${pid}" >nul`, 'if errorlevel 1 goto swap', 'ping -n 2 127.0.0.1 >nul', 'goto wait',
-    // helper processes may hold the folder for a moment after the app has gone
-    ':swap', 'move /Y "%DEST%" "%OLD%" >nul 2>&1', 'if not errorlevel 1 goto place', 'set /a N+=1', 'if %N% GEQ 30 goto launch', 'ping -n 2 127.0.0.1 >nul', 'goto swap',
-    ':place', 'move /Y "%NEW%" "%DEST%" >nul 2>&1', 'if errorlevel 1 goto restore', 'rmdir /s /q "%OLD%" >nul 2>&1', 'goto launch',
-    ':restore', 'move /Y "%OLD%" "%DEST%" >nul 2>&1',
-    ':launch', 'rmdir /s /q "%STAGE%" >nul 2>&1', `start "" "%DEST%\\${path.basename(process.execPath)}"`, ''].join('\r\n')
+// It is PowerShell using only its own commands, with the paths handed over in the environment so that it
+// holds nothing cmd or PowerShell would need quoted.
+const SWAP = ['$ErrorActionPreference = [System.Management.Automation.ActionPreference]::SilentlyContinue',
+  'Wait-Process -Id $env:ARGO_SWAP_PID -Timeout 60',
+  // helper processes may hold the folder for a moment after the app has gone
+  '$moved = $false',
+  'for ($n = 0; $n -lt 30 -and -not $moved; $n++) { try { Move-Item -LiteralPath $env:ARGO_SWAP_DEST -Destination $env:ARGO_SWAP_OLD -ErrorAction Stop; $moved = $true } catch { Start-Sleep -Seconds 1 } }',
+  'if ($moved) { try { Move-Item -LiteralPath $env:ARGO_SWAP_NEW -Destination $env:ARGO_SWAP_DEST -ErrorAction Stop; Remove-Item -LiteralPath $env:ARGO_SWAP_OLD -Recurse -Force } catch { Move-Item -LiteralPath $env:ARGO_SWAP_OLD -Destination $env:ARGO_SWAP_DEST } }',
+  'Remove-Item -LiteralPath $env:ARGO_SWAP_STAGE -Recurse -Force',
+  '$exe = $env:ARGO_SWAP_EXE',
+  'Remove-Item Env:ARGO_SWAP_*',
+  'Start-Process -FilePath $exe'].join('; ')
+
+// Starts the helper so that it outlives this process and never shows a window. Node ends the children it
+// started when it exits, unless they are detached, and a detached child has no console: PowerShell will not
+// run without one, and every console program a batch file calls opens a console window of its own. So a
+// hidden cmd is started the ordinary way and it starts PowerShell, which shares the hidden console and is
+// not ended with us.
+function startSwap(pid, dest, fresh, stage, exe = path.basename(process.execPath)) {
+  const system = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')
+  const powershell = path.join(system, 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  return spawn(process.env.ComSpec || path.join(system, 'cmd.exe'), ['/d', '/s', '/c', `"start "" /b "${powershell}" -NoLogo -NoProfile -NonInteractive -Command ${SWAP}"`], {
+    // from the temp folder: a helper whose working directory is the app folder would itself keep it from being moved
+    cwd: os.tmpdir(), stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true,
+    env: { ...process.env, ARGO_SWAP_PID: String(pid), ARGO_SWAP_DEST: dest, ARGO_SWAP_NEW: fresh, ARGO_SWAP_OLD: `${dest}.old-${pid}`, ARGO_SWAP_STAGE: stage, ARGO_SWAP_EXE: path.join(dest, exe) },
+  })
 }
 
 // `app`: Electron's app. `emit(state)`: tell the window. `beforeQuit()`: stop whatever runs out of the app folder.
@@ -99,6 +117,8 @@ function createUpdater({ app, emit, beforeQuit }) {
       const zip = await download(m.url)
       verify(zip, m.signature)
       set({ phase: 'installing' })
+      // what an update that never finished left behind
+      for (const f of fs.readdirSync(parent)) if (/^\.argo-update-\d+$/.test(f)) fs.rmSync(path.join(parent, f), { recursive: true, force: true })
       // unpacked beside the app, so the swap is a rename on the same drive
       stage = path.join(parent, `.argo-update-${process.pid}`)
       fs.rmSync(stage, { recursive: true, force: true })
@@ -110,10 +130,9 @@ function createUpdater({ app, emit, beforeQuit }) {
       if (!fresh || fresh === stage) throw new Error("The download didn't contain the app.")
       // a copy put there by the installer keeps its uninstaller, so it can still be removed from Windows Settings
       for (const f of fs.readdirSync(dest)) if (/^Uninstall .*.exe$/i.test(f)) fs.copyFileSync(path.join(dest, f), path.join(fresh, f))
-      const script = path.join(os.tmpdir(), `argo-relaunch-${process.pid}.cmd`)
-      fs.writeFileSync(script, swapScript(process.pid, dest, fresh, stage))
       await beforeQuit()
-      spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', script], { detached: true, stdio: 'ignore', windowsHide: true }).unref() // not waited for: it waits on us
+      // not waited for beyond its start: it waits on us
+      await new Promise((ok, bad) => startSwap(process.pid, dest, fresh, stage).on('error', () => bad(new Error('Could not start the installer.'))).on('exit', ok))
       app.exit(0)
     } catch (e) {
       if (stage) fs.rmSync(stage, { recursive: true, force: true })
@@ -124,4 +143,4 @@ function createUpdater({ app, emit, beforeQuit }) {
   return { check, install, state: () => state }
 }
 
-module.exports = { createUpdater, isNewer, verify, swapScript, PUBLIC_KEY }
+module.exports = { createUpdater, isNewer, verify, startSwap, PUBLIC_KEY }
